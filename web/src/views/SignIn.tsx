@@ -77,10 +77,10 @@ export function SignIn({ onSignIn }: Props) {
 
 function describe(cause: unknown): string {
   if (cause instanceof ApiError && cause.code === 'KEY_BINDING_WINDOW_CLOSED') {
-    return 'Sign-in took too long to bind a key. Sign in again.';
+    return 'Sign-in took too long. Sign in again.';
   }
   if (cause instanceof ApiError && cause.code === 'KEY_ALREADY_BOUND') {
-    return 'This session already has a key. Sign in again.';
+    return 'Sign-in could not be completed. Try again.';
   }
   return cause instanceof Error ? cause.message : 'Something went wrong. Try again.';
 }

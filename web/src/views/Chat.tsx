@@ -13,12 +13,12 @@ import {
 const FREE_LIMIT_FALLBACK = 3;
 
 const PLANS: { tier: Tier; name: string; messages: string; monthlyCents: number; yearlyCents: number }[] = [
-  { tier: 'BASIC', name: 'Basic', messages: '10 messages', monthlyCents: 999, yearlyCents: 9990 },
-  { tier: 'PRO', name: 'Pro', messages: '100 messages', monthlyCents: 2999, yearlyCents: 29990 },
+  { tier: 'BASIC', name: 'Basic', messages: '10', monthlyCents: 999, yearlyCents: 9990 },
+  { tier: 'PRO', name: 'Pro', messages: '100', monthlyCents: 2999, yearlyCents: 29990 },
   {
     tier: 'ENTERPRISE',
     name: 'Enterprise',
-    messages: 'Unlimited messages',
+    messages: 'Unlimited',
     monthlyCents: 19999,
     yearlyCents: 199990,
   },
@@ -67,6 +67,11 @@ function meterFromSubscription(sub: Subscription): MeterState {
 function readResetsAt(error: ApiError): string | undefined {
   const value = error.details?.['freeResetsAt'];
   return typeof value === 'string' ? value : undefined;
+}
+
+function readFreeLimit(error: ApiError): number | null {
+  const value = error.details?.['freeLimit'];
+  return typeof value === 'number' ? value : null;
 }
 
 function Digits({ value }: { value: number }) {
@@ -118,10 +123,11 @@ export function Chat({ session, onSignOut }: { session: Session; onSignOut: () =
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [meter, setMeter] = useState<MeterState>({
     kind: 'free',
-    label: 'free quota',
+    label: 'Free quota',
     remaining: FREE_LIMIT_FALLBACK,
     limit: FREE_LIMIT_FALLBACK,
   });
+  const [freeLimit, setFreeLimit] = useState(FREE_LIMIT_FALLBACK);
   const [exhausted, setExhausted] = useState(false);
   const [resetsAt, setResetsAt] = useState<string | undefined>(undefined);
   const [question, setQuestion] = useState('');
@@ -164,7 +170,6 @@ export function Chat({ session, onSignOut }: { session: Session; onSignOut: () =
     const startedAt = performance.now();
     try {
       const answer = await askQuestion(session, trimmed);
-      const freeLimit = meter.limit ?? FREE_LIMIT_FALLBACK;
       setExchanges((items) => [
         ...items,
         {
@@ -181,27 +186,27 @@ export function Chat({ session, onSignOut }: { session: Session; onSignOut: () =
       setQuestion('');
       setExhausted(false);
       if (answer.quota.source === 'FREE') {
-        setMeter((current) => ({
-          ...current,
+        setMeter({
           kind: 'free',
-          label: 'free quota',
+          label: 'Free quota',
           remaining: answer.quota.freeRemaining,
-          limit: current.limit ?? FREE_LIMIT_FALLBACK,
-        }));
+          limit: freeLimit,
+        });
         setResetsAt(answer.quota.freeResetsAt);
       } else {
         await refreshBundleMeter(answer.quota.subscriptionId);
       }
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === 'QUOTA_EXHAUSTED') {
+        const serverLimit = readFreeLimit(cause);
+        if (serverLimit !== null) setFreeLimit(serverLimit);
         setExhausted(true);
-        setMeter((current) => ({
-          ...current,
+        setMeter({
           kind: 'free',
-          label: 'free quota',
+          label: 'Free quota',
           remaining: 0,
-          limit: current.limit ?? FREE_LIMIT_FALLBACK,
-        }));
+          limit: serverLimit ?? freeLimit,
+        });
         setResetsAt(readResetsAt(cause));
       } else if (cause instanceof ApiError && cause.code === 'KEY_NOT_BOUND') {
         setKeyLost(true);
@@ -248,7 +253,9 @@ export function Chat({ session, onSignOut }: { session: Session; onSignOut: () =
         <Meter state={meter} exhausted={exhausted} />
       </header>
       <section className="exchanges">
-        {exchanges.length === 0 ? <p className="empty">Ask a question to see it answered here.</p> : null}
+        {exchanges.length === 0 ? (
+          <p className="empty">Ask a question and the answer will appear here.</p>
+        ) : null}
         {exchanges.map((item) => (
           <article className="exchange" key={item.id}>
             <p className="question">{item.question}</p>
@@ -301,6 +308,7 @@ export function Chat({ session, onSignOut }: { session: Session; onSignOut: () =
               <thead>
                 <tr>
                   <th scope="col">Plan</th>
+                  <th scope="col">Messages</th>
                   <th scope="col">Price</th>
                   <th scope="col">
                     <span className="sr-only">Buy</span>
@@ -310,10 +318,8 @@ export function Chat({ session, onSignOut }: { session: Session; onSignOut: () =
               <tbody>
                 {PLANS.map((plan) => (
                   <tr key={plan.tier}>
-                    <th scope="row">
-                      <span className="plan-name">{plan.name}</span>
-                      <span className="plan-messages">{plan.messages}</span>
-                    </th>
+                    <th scope="row">{plan.name}</th>
+                    <td>{plan.messages}</td>
                     <td className="plan-price">
                       {formatPrice(cycle === 'MONTHLY' ? plan.monthlyCents : plan.yearlyCents, cycle)}
                     </td>
