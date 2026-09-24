@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from './auth/auth.module';
 import { CoreModule } from './shared/core.module';
 import { HttpPlatformModule } from './shared/http/http-platform.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
 import { RedisModule } from './shared/redis/redis.module';
 
 @Module({
-  imports: [CoreModule, PrismaModule, RedisModule, HttpPlatformModule],
+  imports: [CoreModule, PrismaModule, RedisModule, HttpPlatformModule, AuthModule],
 })
 export class AppModule {}
