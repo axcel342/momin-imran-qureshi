@@ -1,3 +1,4 @@
+import type { VerifiedToken } from '../../auth/domain/ports';
 import type { Actor } from '../domain/actor';
 
 declare global {
@@ -7,7 +8,7 @@ declare global {
       requestId: string;
       rawBody?: Buffer;
       actor?: Actor;
-      verifiedToken?: unknown;
+      verifiedToken?: VerifiedToken;
       timedOut?: boolean;
     }
   }

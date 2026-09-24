@@ -43,7 +43,7 @@ export class UserRateLimitGuard implements CanActivate {
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<Request>();
-    const userId = req.actor?.userId ?? (req.verifiedToken as { userId?: string } | undefined)?.userId;
+    const userId = req.actor?.userId ?? req.verifiedToken?.userId;
     if (!userId) return true;
     const group = groupOf(this.reflector, ctx);
     await enforce(this.limiter, ctx.switchToHttp().getResponse<Response>(), `rl:user:${group}:${userId}`, RATE_LIMITS[group].perUser);
