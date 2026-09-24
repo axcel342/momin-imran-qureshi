@@ -395,11 +395,13 @@ The IdP is **mocked with a real JWKS server, not bypassed**: `test/support/mock-
 - **Rate limiting:** per-user chat limit → 429 with `Retry-After`; per-IP auth limit → 429.
 - **Security middleware:** helmet headers; disallowed CORS origin; 413; 415; unknown field → 400; timeout → 504; error envelope shape.
 
+The `overrides: { "htmlparser2": "10.1.0" }` pin in `package.json` exists because Jest 29's CJS runtime cannot `require` the ESM-only `htmlparser2@12` that `sanitize-html@2.17.7` depends on; revisit the pin when the test runtime supports ESM-only dependencies.
+
 ## Future work
 
 Cut from this minimal build, in the spec's priority order:
 
-- OAuth PKCE CLI script. GitHub login is configured in Supabase, and `scripts/client.ts` accepts a `--token` from any login flow.
+- OAuth PKCE CLI script. GitHub login is configured in Supabase, and `scripts/client.ts` accepts a token from any login flow via `npm run client -- login-token <jwt>` (an intentional deviation from the spec's `--token` flag).
 - Reserve/complete flow with PENDING status, refunds and a sweeper, replaced by the flow in §8.3.
 - Billing-events table. Payment results are logged instead.
 - Logout/revoke-key endpoint, binding expiry, route audit at boot (covered by the test instead), boundaries plugin, Testcontainers.
