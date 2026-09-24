@@ -34,7 +34,7 @@ A secure REST backend in TypeScript with DDD/Clean Architecture and PostgreSQL. 
 | D5 | Rate-limit and nonce storage | **Redis 7** |
 | D6 | Quota deduction | **Row lock (`SELECT … FOR UPDATE`) + a pure domain allocator, in one transaction after the AI call** (§8.3) |
 | D7 | Validation | **Zod** `.strict()` schemas through one Nest pipe |
-| D8 | Logging | **pino** (`nestjs-pino`) |
+| D8 | Logging | **pino** through a small request-completion middleware (no `nestjs-pino`) |
 | D9 | Scheduler | `@nestjs/schedule` cron + `FOR UPDATE SKIP LOCKED` |
 | D10 | Rate limiter | Small custom Redis fixed-window limiter (`INCR` + `EXPIRE`) used by two guards |
 | D11 | Tests | Jest + supertest. Integration tests run against Postgres and Redis started by `compose.yaml` (Podman locally, service containers in CI). The IdP is a local mock JWKS server |
@@ -174,7 +174,7 @@ type BundleSnapshot = { id: string; remaining: number | null; createdAt: Date; s
   - `!autoRenew` → `EXPIRED`;
   - payment OK → next period (`startDate = endDate`, new `endDate` and `renewalDate`, `usedMessages = 0`);
   - payment failed → `INACTIVE / PAYMENT_FAILED`, `renewalDate = null`.
-- `PeriodCalculator.add` uses `date-fns` `addMonths`/`addYears`, which clamp to the end of the month.
+- `PeriodCalculator.add` uses a small UTC month-adding function that clamps to the end of the month. `date-fns` works in local time, so it is not used.
 
 **`SubscriptionAccessPolicy`**
 - `canView` / `canCancel`: the owner or an admin.
