@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BUNDLE_QUOTA } from '../chat/domain/ports';
 import { CancelSubscriptionUseCase } from './application/cancel-subscription.use-case';
 import { CreateSubscriptionUseCase } from './application/create-subscription.use-case';
 import { ListSubscriptionsUseCase } from './application/list-subscriptions.use-case';
@@ -8,6 +9,7 @@ import { AdminBillingController } from './controllers/admin-billing.controller';
 import { SubscriptionsController } from './controllers/subscriptions.controller';
 import { PAYMENT_GATEWAY } from './domain/ports';
 import { BillingScheduler } from './infrastructure/billing.scheduler';
+import { BundleQuotaAdapter } from './infrastructure/bundle-quota.adapter';
 import { SimulatedPaymentGateway } from './infrastructure/simulated-payment-gateway';
 import { PrismaSubscriptionRepository } from './repositories/prisma-subscription.repository';
 import { SUBSCRIPTION_REPOSITORY } from './repositories/subscription.repository';
@@ -23,7 +25,8 @@ import { SUBSCRIPTION_REPOSITORY } from './repositories/subscription.repository'
     BillingScheduler,
     { provide: SUBSCRIPTION_REPOSITORY, useClass: PrismaSubscriptionRepository },
     { provide: PAYMENT_GATEWAY, useClass: SimulatedPaymentGateway },
+    { provide: BUNDLE_QUOTA, useClass: BundleQuotaAdapter },
   ],
-  exports: [SUBSCRIPTION_REPOSITORY, PAYMENT_GATEWAY],
+  exports: [SUBSCRIPTION_REPOSITORY, PAYMENT_GATEWAY, BUNDLE_QUOTA],
 })
 export class SubscriptionsModule {}
