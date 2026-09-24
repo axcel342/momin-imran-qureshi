@@ -30,6 +30,21 @@ describe('Observability', () => {
     expect(ok.body).toEqual({ status: 'ok', checks: { database: 'up', redis: 'up' } });
   });
 
+  it('returns the error envelope with per-dependency checks when a dependency is down', async () => {
+    const queryRaw = jest.spyOn(ctx.prisma, '$queryRaw').mockRejectedValueOnce(new Error('database down'));
+    const res = await request(ctx.http).get('/health').set('X-Health-Token', ctx.config.HEALTH_CHECK_TOKEN);
+    queryRaw.mockRestore();
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'Service degraded',
+        details: { checks: { database: 'down', redis: 'up' } },
+        requestId: expect.any(String),
+      },
+    });
+  });
+
   it('serves usage and subscription metrics to admins only', async () => {
     const user = await TestClient.register(ctx);
     await user.post('/v1/chat/messages', { question: 'hello' });

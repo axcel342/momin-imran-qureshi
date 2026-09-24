@@ -1,5 +1,5 @@
-import { Controller, Get, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Get } from '@nestjs/common';
+import { DomainError } from '../shared/domain/errors';
 import { HealthProbe, RateLimitGroup } from '../shared/http/decorators';
 import { PrismaService } from '../shared/prisma/prisma.service';
 import { RedisService } from '../shared/redis/redis.service';
@@ -14,7 +14,7 @@ export class HealthController {
   ) {}
 
   @Get()
-  async check(@Res({ passthrough: true }) res: Response) {
+  async check() {
     const [database, redis] = await Promise.all([
       this.prisma.$queryRaw`SELECT 1`.then(
         () => 'up' as const,
@@ -25,8 +25,10 @@ export class HealthController {
         () => 'down' as const,
       ),
     ]);
-    const healthy = database === 'up' && redis === 'up';
-    res.status(healthy ? 200 : 503);
-    return { status: healthy ? 'ok' : 'degraded', checks: { database, redis } };
+    const checks = { database, redis };
+    if (database === 'down' || redis === 'down') {
+      throw new DomainError('SERVICE_UNAVAILABLE', 'Service degraded', { checks });
+    }
+    return { status: 'ok', checks };
   }
 }
