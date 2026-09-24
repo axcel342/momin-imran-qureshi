@@ -31,8 +31,10 @@ describe('Rate limiting', () => {
 
   it('limits the auth group per user (10/min)', async () => {
     const a = await TestClient.register(ctx); // 1 auth-group hit for this user
-    let last = 200;
-    for (let i = 0; i < 10; i++) last = (await a.get('/v1/auth/me')).status;
-    expect(last).toBe(429);
+    for (let i = 0; i < 9; i++) expect((await a.get('/v1/auth/me')).status).toBe(200); // hits 2-10
+    const limited = await a.get('/v1/auth/me'); // hit 11
+    expect(limited.status).toBe(429);
+    expect(limited.body.error.code).toBe('RATE_LIMITED');
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
   });
 });
