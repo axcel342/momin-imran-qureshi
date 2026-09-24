@@ -3,3 +3,5 @@ dist/
 coverage/
 .env
 .ggi-session.json
+.vercel
+.env.local
