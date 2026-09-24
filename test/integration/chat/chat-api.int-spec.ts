@@ -27,34 +27,67 @@ describe('Chat API', () => {
       model: 'gpt-4o-mini',
       quota: { source: 'FREE', subscriptionId: null, freeRemaining: 2 },
     });
-    expect(res.body.usage.totalTokens).toBe(Number(res.body.usage.promptTokens) + Number(res.body.usage.completionTokens));
+    expect(res.body.usage.totalTokens).toBe(
+      Number(res.body.usage.promptTokens) + Number(res.body.usage.completionTokens),
+    );
     const row = await ctx.prisma.chatMessage.findUniqueOrThrow({ where: { id: res.body.id } });
-    expect(row).toMatchObject({ userId: user.userId, question: 'How do transactions work?', answer: res.body.answer, requestId: res.headers['x-request-id'] });
+    expect(row).toMatchObject({
+      userId: user.userId,
+      question: 'How do transactions work?',
+      answer: res.body.answer,
+      requestId: res.headers['x-request-id'],
+    });
   });
 
   it('gives 3 free messages then a typed 402 QUOTA_EXHAUSTED', async () => {
     await exhaustFree(user);
     const res = await ask(user);
     expect(res.status).toBe(402);
-    expect(res.body.error).toMatchObject({ code: 'QUOTA_EXHAUSTED', details: { freeUsed: 3, freeLimit: 3, usableBundles: 0 } });
+    expect(res.body.error).toMatchObject({
+      code: 'QUOTA_EXHAUSTED',
+      details: { freeUsed: 3, freeLimit: 3, usableBundles: 0 },
+    });
   });
 
   it('charges the newest bundle after free quota', async () => {
-    const older = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
-    const newer = await user.post('/v1/subscriptions', { tier: 'PRO', billingCycle: 'MONTHLY', autoRenew: true });
+    const older = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
+    const newer = await user.post('/v1/subscriptions', {
+      tier: 'PRO',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     await exhaustFree(user);
     const res = await ask(user);
     expect(res.status).toBe(201);
     expect(res.body.quota).toMatchObject({ source: 'BUNDLE', subscriptionId: newer.body.id });
-    expect((await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: newer.body.id } })).usedMessages).toBe(1);
-    expect((await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: older.body.id } })).usedMessages).toBe(0);
+    expect(
+      (await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: newer.body.id } })).usedMessages,
+    ).toBe(1);
+    expect(
+      (await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: older.body.id } })).usedMessages,
+    ).toBe(0);
   });
 
   it('never charges a cancelled or expired bundle (Review Focus #3)', async () => {
-    const cancelled = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const cancelled = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     await user.post(`/v1/subscriptions/${cancelled.body.id}/cancel`);
-    const expired = await user.post('/v1/subscriptions', { tier: 'PRO', billingCycle: 'MONTHLY', autoRenew: true });
-    await ctx.prisma.subscription.update({ where: { id: expired.body.id }, data: { endDate: new Date(Date.now() - 1000) } });
+    const expired = await user.post('/v1/subscriptions', {
+      tier: 'PRO',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
+    await ctx.prisma.subscription.update({
+      where: { id: expired.body.id },
+      data: { endDate: new Date(Date.now() - 1000) },
+    });
     await exhaustFree(user);
     const res = await ask(user);
     expect(res.status).toBe(402);
@@ -72,11 +105,17 @@ describe('Chat API', () => {
   });
 
   it('never over-draws a bundle under concurrency', async () => {
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     await exhaustFree(user);
     const results = await Promise.all(Array.from({ length: 15 }, (_, i) => ask(user, `drain ${i}`)));
     expect(results.filter((r) => r.status === 201)).toHaveLength(10);
-    expect((await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: sub.body.id } })).usedMessages).toBe(10);
+    expect(
+      (await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: sub.body.id } })).usedMessages,
+    ).toBe(10);
   });
 
   it('sanitises markup, rejects markup-only questions and keeps emoji (Review Focus #1)', async () => {

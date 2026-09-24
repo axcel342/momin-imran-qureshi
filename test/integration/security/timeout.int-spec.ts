@@ -4,7 +4,9 @@ import { TestClient } from '../../support/test-client';
 describe('Global timeout on a real route', () => {
   let ctx: TestContext;
   beforeAll(async () => {
-    ctx = await createTestApp({ env: { REQUEST_TIMEOUT_MS: '200', AI_MOCK_MIN_LATENCY_MS: '600', AI_MOCK_MAX_LATENCY_MS: '600' } });
+    ctx = await createTestApp({
+      env: { REQUEST_TIMEOUT_MS: '200', AI_MOCK_MIN_LATENCY_MS: '600', AI_MOCK_MAX_LATENCY_MS: '600' },
+    });
   });
   beforeEach(() => resetState(ctx));
   afterAll(() => closeTestApp(ctx));

@@ -23,7 +23,8 @@ describe('Rate limiting', () => {
   });
 
   it('limits the auth group per IP (20/min) before any token verification', async () => {
-    for (let i = 0; i < 20; i++) expect((await request(ctx.http).post('/v1/auth/device-keys')).status).toBe(401);
+    for (let i = 0; i < 20; i++)
+      expect((await request(ctx.http).post('/v1/auth/device-keys')).status).toBe(401);
     const limited = await request(ctx.http).post('/v1/auth/device-keys');
     expect(limited.status).toBe(429);
     expect(limited.headers['retry-after']).toBeDefined();

@@ -85,7 +85,9 @@ describe('HTTP platform', () => {
   });
 
   it('rejects bodies over 16kb with 413', async () => {
-    const res = await request(http).post('/test/echo').send({ name: 'x'.repeat(17 * 1024) });
+    const res = await request(http)
+      .post('/test/echo')
+      .send({ name: 'x'.repeat(17 * 1024) });
     expect(res.status).toBe(413);
     expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
   });
@@ -99,7 +101,10 @@ describe('HTTP platform', () => {
   it('rejects a body on GET and malformed JSON with 400', async () => {
     const withBody = await request(http).get('/test/boom').set('Content-Type', 'application/json').send('{}');
     expect(withBody.status).toBe(400);
-    const malformed = await request(http).post('/test/echo').set('Content-Type', 'application/json').send('{"name":');
+    const malformed = await request(http)
+      .post('/test/echo')
+      .set('Content-Type', 'application/json')
+      .send('{"name":');
     expect(malformed.status).toBe(400);
     expect(malformed.body.error.code).toBe('VALIDATION_FAILED');
   });
@@ -112,7 +117,9 @@ describe('HTTP platform', () => {
   });
 
   it('strips markup and rejects control characters', async () => {
-    const stripped = await request(http).post('/test/echo').send({ name: '<b>Bob</b><script>alert(1)</script>' });
+    const stripped = await request(http)
+      .post('/test/echo')
+      .send({ name: '<b>Bob</b><script>alert(1)</script>' });
     expect(stripped.body).toEqual({ name: 'Bob' });
     const control = await request(http).post('/test/echo').send({ name: 'Bo\u0007b' });
     expect(control.status).toBe(400);

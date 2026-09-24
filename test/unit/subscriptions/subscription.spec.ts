@@ -2,7 +2,16 @@ import { Subscription } from '../../../src/subscriptions/domain/entities/subscri
 
 const now = new Date('2026-09-24T12:00:00Z');
 const make = (over: Partial<Parameters<typeof Subscription.create>[0]> = {}) =>
-  Subscription.create({ id: 's1', userId: 'u1', tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true, paymentSucceeded: true, now, ...over });
+  Subscription.create({
+    id: 's1',
+    userId: 'u1',
+    tier: 'BASIC',
+    billingCycle: 'MONTHLY',
+    autoRenew: true,
+    paymentSucceeded: true,
+    now,
+    ...over,
+  });
 
 describe('Subscription lifecycle', () => {
   it('creates an active bundle with catalog quota, price and dates', () => {
@@ -19,13 +28,21 @@ describe('Subscription lifecycle', () => {
       autoRenew: true,
       createdAt: now,
     });
-    expect(make({ tier: 'PRO', billingCycle: 'YEARLY' }).toSnapshot()).toMatchObject({ maxMessages: 100, priceCents: 29990 });
+    expect(make({ tier: 'PRO', billingCycle: 'YEARLY' }).toSnapshot()).toMatchObject({
+      maxMessages: 100,
+      priceCents: 29990,
+    });
     expect(make({ tier: 'ENTERPRISE' }).toSnapshot().maxMessages).toBeNull();
   });
 
   it('creates an inactive PAYMENT_FAILED bundle when the first charge fails', () => {
     const s = make({ paymentSucceeded: false });
-    expect(s.toSnapshot()).toMatchObject({ status: 'INACTIVE', inactiveReason: 'PAYMENT_FAILED', renewalDate: null, autoRenew: false });
+    expect(s.toSnapshot()).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'PAYMENT_FAILED',
+      renewalDate: null,
+      autoRenew: false,
+    });
     expect(s.isUsableAt(now)).toBe(false);
   });
 
@@ -100,13 +117,21 @@ describe('Subscription lifecycle', () => {
   it('deactivates on failed renewal payment', () => {
     const s = make();
     s.renew(new Date('2026-10-25T00:00:00Z'), false);
-    expect(s.toSnapshot()).toMatchObject({ status: 'INACTIVE', inactiveReason: 'PAYMENT_FAILED', renewalDate: null });
+    expect(s.toSnapshot()).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'PAYMENT_FAILED',
+      renewalDate: null,
+    });
   });
 
   it('expires at period end when auto-renew is off', () => {
     const s = make({ autoRenew: false });
     s.renew(new Date('2026-10-25T00:00:00Z'), undefined);
-    expect(s.toSnapshot()).toMatchObject({ status: 'INACTIVE', inactiveReason: 'EXPIRED', renewalDate: null });
+    expect(s.toSnapshot()).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'EXPIRED',
+      renewalDate: null,
+    });
   });
 
   it('ignores renew() when not yet due', () => {

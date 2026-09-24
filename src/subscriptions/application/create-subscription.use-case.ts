@@ -7,7 +7,10 @@ import { Subscription, type SubscriptionProps } from '../domain/entities/subscri
 import { PAYMENT_GATEWAY, type PaymentGateway } from '../domain/ports';
 import { priceFor } from '../domain/services/pricing-catalog';
 import type { BillingCycle, Tier } from '../domain/value-objects';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 @Injectable()
 export class CreateSubscriptionUseCase {
@@ -18,12 +21,28 @@ export class CreateSubscriptionUseCase {
   ) {}
 
   /** Always creates for the actor themselves (policy: no creating on behalf of others). */
-  async execute(actor: Actor, input: { tier: Tier; billingCycle: BillingCycle; autoRenew: boolean }): Promise<SubscriptionProps> {
+  async execute(
+    actor: Actor,
+    input: { tier: Tier; billingCycle: BillingCycle; autoRenew: boolean },
+  ): Promise<SubscriptionProps> {
     const id = randomUUID();
-    const payment = await this.payments.charge({ subscriptionId: id, userId: actor.userId, amountCents: priceFor(input.tier, input.billingCycle) });
-    const sub = Subscription.create({ id, userId: actor.userId, ...input, paymentSucceeded: payment.ok, now: this.clock.now() });
+    const payment = await this.payments.charge({
+      subscriptionId: id,
+      userId: actor.userId,
+      amountCents: priceFor(input.tier, input.billingCycle),
+    });
+    const sub = Subscription.create({
+      id,
+      userId: actor.userId,
+      ...input,
+      paymentSucceeded: payment.ok,
+      now: this.clock.now(),
+    });
     await this.subs.save(sub);
-    if (!payment.ok) throw new DomainError('PAYMENT_FAILED', 'Payment was declined; the subscription is inactive', { subscriptionId: id });
+    if (!payment.ok)
+      throw new DomainError('PAYMENT_FAILED', 'Payment was declined; the subscription is inactive', {
+        subscriptionId: id,
+      });
     return sub.toSnapshot();
   }
 }

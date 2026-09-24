@@ -29,7 +29,10 @@ export class BillingScheduler implements OnModuleInit {
       const summary = await this.billing.execute('scheduler');
       if (summary.processed > 0) this.logger.log({ msg: 'billing cycle complete', ...summary });
     } catch (err) {
-      this.logger.error({ msg: 'billing cycle failed', err: err instanceof Error ? err.message : String(err) });
+      this.logger.error({
+        msg: 'billing cycle failed',
+        err: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       this.running = false;
     }

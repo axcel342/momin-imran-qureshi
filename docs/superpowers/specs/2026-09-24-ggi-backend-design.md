@@ -16,6 +16,7 @@ A secure REST backend in TypeScript with DDD/Clean Architecture and PostgreSQL. 
 2. **Subscriptions.** Users buy Basic, Pro or Enterprise bundles, monthly or yearly, with auto-renew. Renewal is simulated with random payment failures, and cancellation is supported.
 
 **Success means:**
+
 - Every PDF bullet maps to a mechanism and, where the PDF asks for one, a test (§13).
 - Tests need no external accounts.
 - The README covers the architecture, the security model and the setup.
@@ -25,37 +26,37 @@ A secure REST backend in TypeScript with DDD/Clean Architecture and PostgreSQL. 
 
 ## 2. Decisions
 
-| # | Decision | Choice |
-|---|----------|--------|
-| D1 | Framework | TypeScript (strict) + **NestJS** (Express adapter) |
-| D2 | ORM / migrations | **Prisma** + PostgreSQL 16 |
-| D3 | Identity provider | **Supabase Auth** (email/password + GitHub OAuth, both configured in the Supabase dashboard), verified via JWKS |
-| D4 | "Token alone is not enough" | **Session-bound request signing** (ECDSA P-256 key bound to the Supabase `session_id`; signed timestamp + nonce + body hash) |
-| D5 | Rate-limit and nonce storage | **Redis 7** |
-| D6 | Quota deduction | **Row lock (`SELECT … FOR UPDATE`) + a pure domain allocator, in one transaction after the AI call** (§8.3) |
-| D7 | Validation | **Zod** `.strict()` schemas through one Nest pipe |
-| D8 | Logging | **pino** through a small request-completion middleware (no `nestjs-pino`) |
-| D9 | Scheduler | `@nestjs/schedule` cron + `FOR UPDATE SKIP LOCKED` |
-| D10 | Rate limiter | Small custom Redis fixed-window limiter (`INCR` + `EXPIRE`) used by two guards |
-| D11 | Tests | Jest + supertest. Integration tests run against Postgres and Redis started by `compose.yaml` (Podman locally, service containers in CI). The IdP is a local mock JWKS server |
-| D12 | Runtime | **Node 22 LTS** |
-| D13 | Health endpoint | Protected by the `X-Health-Token` header |
+| #   | Decision                     | Choice                                                                                                                                                                       |
+| --- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Framework                    | TypeScript (strict) + **NestJS** (Express adapter)                                                                                                                           |
+| D2  | ORM / migrations             | **Prisma** + PostgreSQL 16                                                                                                                                                   |
+| D3  | Identity provider            | **Supabase Auth** (email/password + GitHub OAuth, both configured in the Supabase dashboard), verified via JWKS                                                              |
+| D4  | "Token alone is not enough"  | **Session-bound request signing** (ECDSA P-256 key bound to the Supabase `session_id`; signed timestamp + nonce + body hash)                                                 |
+| D5  | Rate-limit and nonce storage | **Redis 7**                                                                                                                                                                  |
+| D6  | Quota deduction              | **Row lock (`SELECT … FOR UPDATE`) + a pure domain allocator, in one transaction after the AI call** (§8.3)                                                                  |
+| D7  | Validation                   | **Zod** `.strict()` schemas through one Nest pipe                                                                                                                            |
+| D8  | Logging                      | **pino** through a small request-completion middleware (no `nestjs-pino`)                                                                                                    |
+| D9  | Scheduler                    | `@nestjs/schedule` cron + `FOR UPDATE SKIP LOCKED`                                                                                                                           |
+| D10 | Rate limiter                 | Small custom Redis fixed-window limiter (`INCR` + `EXPIRE`) used by two guards                                                                                               |
+| D11 | Tests                        | Jest + supertest. Integration tests run against Postgres and Redis started by `compose.yaml` (Podman locally, service containers in CI). The IdP is a local mock JWKS server |
+| D12 | Runtime                      | **Node 22 LTS**                                                                                                                                                              |
+| D13 | Health endpoint              | Protected by the `X-Health-Token` header                                                                                                                                     |
 
 ---
 
 ## 3. Interpretations of ambiguous requirements (approved)
 
-| # | PDF text | Interpretation |
-|---|----------|----------------|
-| A1 | "bundle with the latest remaining quota" | Free quota first, then the **most recently created** usable bundle (`createdAt DESC, id DESC`). Enterprise (unlimited) always has quota remaining. |
-| A2 | 3 free per calendar month, reset on the 1st | UTC month. A row per `(user, 'YYYY-MM')`, so the reset is implicit and needs no cron job. |
-| A3 | Basic 10 / Pro 100 | `maxMessages` **per billing cycle**; renewal resets `usedMessages`. |
-| A4 | Cancellation ends the current cycle | Takes effect immediately: `endDate = now`, `INACTIVE (CANCELLED)`, `autoRenew = false`, `renewalDate = null`. Chat history is kept. |
-| A5 | active / inactive | `status ∈ {ACTIVE, INACTIVE}` + `inactiveReason ∈ {CANCELLED, PAYMENT_FAILED, EXPIRED}`. |
-| A6 | Payment at creation | The first cycle is charged on creation. If that fails, the subscription is saved as `INACTIVE (PAYMENT_FAILED)` and the API returns 402 `PAYMENT_FAILED`. |
-| A7 | "Authentication endpoints" | Our auth routes are `POST /v1/auth/device-keys` and `GET /v1/auth/me`, and they get the strictest limits. |
-| A8 | All endpoints protected | Health needs `X-Health-Token`. Metrics is admin-only. |
-| A9 | Admin system-wide access | Admins can list any user's chats and subscriptions (via `?userId=`), cancel any subscription, view metrics and trigger billing. |
+| #   | PDF text                                    | Interpretation                                                                                                                                            |
+| --- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | "bundle with the latest remaining quota"    | Free quota first, then the **most recently created** usable bundle (`createdAt DESC, id DESC`). Enterprise (unlimited) always has quota remaining.        |
+| A2  | 3 free per calendar month, reset on the 1st | UTC month. A row per `(user, 'YYYY-MM')`, so the reset is implicit and needs no cron job.                                                                 |
+| A3  | Basic 10 / Pro 100                          | `maxMessages` **per billing cycle**; renewal resets `usedMessages`.                                                                                       |
+| A4  | Cancellation ends the current cycle         | Takes effect immediately: `endDate = now`, `INACTIVE (CANCELLED)`, `autoRenew = false`, `renewalDate = null`. Chat history is kept.                       |
+| A5  | active / inactive                           | `status ∈ {ACTIVE, INACTIVE}` + `inactiveReason ∈ {CANCELLED, PAYMENT_FAILED, EXPIRED}`.                                                                  |
+| A6  | Payment at creation                         | The first cycle is charged on creation. If that fails, the subscription is saved as `INACTIVE (PAYMENT_FAILED)` and the API returns 402 `PAYMENT_FAILED`. |
+| A7  | "Authentication endpoints"                  | Our auth routes are `POST /v1/auth/device-keys` and `GET /v1/auth/me`, and they get the strictest limits.                                                 |
+| A8  | All endpoints protected                     | Health needs `X-Health-Token`. Metrics is admin-only.                                                                                                     |
+| A9  | Admin system-wide access                    | Admins can list any user's chats and subscriptions (via `?userId=`), cancel any subscription, view metrics and trigger billing.                           |
 
 ---
 
@@ -128,7 +129,13 @@ interface BundleQuotaPort {
   lockUsableBundles(userId: string, now: Date): Promise<BundleSnapshot[]>; // FOR UPDATE, ORDER BY id
   consume(subscriptionId: string): Promise<void>;
 }
-type BundleSnapshot = { id: string; remaining: number | null; createdAt: Date; startDate: Date; endDate: Date };
+type BundleSnapshot = {
+  id: string;
+  remaining: number | null;
+  createdAt: Date;
+  startDate: Date;
+  endDate: Date;
+};
 ```
 
 ### 4.4 Transactions
@@ -157,13 +164,14 @@ type BundleSnapshot = { id: string; remaining: number | null; createdAt: Date; s
 
 **`PricingCatalog`** (integer cents)
 
-| Tier | maxMessages / cycle | Monthly | Yearly |
-|------|------|------|------|
-| BASIC | 10 | 999 | 9990 |
-| PRO | 100 | 2999 | 29990 |
-| ENTERPRISE | null (unlimited) | 19999 | 199990 |
+| Tier       | maxMessages / cycle | Monthly | Yearly |
+| ---------- | ------------------- | ------- | ------ |
+| BASIC      | 10                  | 999     | 9990   |
+| PRO        | 100                 | 2999    | 29990  |
+| ENTERPRISE | null (unlimited)    | 19999   | 199990 |
 
 **`Subscription`** (aggregate)
+
 - Fields: `id, userId, tier, billingCycle, maxMessages|null, usedMessages, priceCents, autoRenew, status, inactiveReason?, startDate, endDate, renewalDate|null, cancelledAt?, createdAt`.
 - `static create(userId, tier, cycle, autoRenew, paymentOk, now)`:
   - payment OK: `ACTIVE`, `endDate = PeriodCalculator.add(now, cycle)`, `renewalDate = endDate`;
@@ -177,6 +185,7 @@ type BundleSnapshot = { id: string; remaining: number | null; createdAt: Date; s
 - `PeriodCalculator.add` uses a small UTC month-adding function that clamps to the end of the month. `date-fns` works in local time, so it is not used.
 
 **`SubscriptionAccessPolicy`**
+
 - `canView` / `canCancel`: the owner or an admin.
 - `canSetAutoRenew`: the owner only.
 - Create is always for the actor themselves.
@@ -199,13 +208,13 @@ type BundleSnapshot = { id: string; remaining: number | null; createdAt: Date; s
 
 UUID primary keys (`gen_random_uuid()`), `timestamptz` everywhere.
 
-| Table | Columns / constraints |
-|-------|-----------------------|
-| `users` | `id` PK (= Supabase sub), `email`, `role` (`USER`/`ADMIN`), `created_at` |
-| `device_bindings` | `id`, `user_id` FK, `session_id` UNIQUE, `public_key_jwk` jsonb, `created_at` |
-| `monthly_usage` | PK `(user_id, period)`, `free_used`, `free_limit`, `total_messages`; CHECK `free_used BETWEEN 0 AND free_limit` |
-| `subscriptions` | fields from §5.2; CHECK `max_messages IS NULL OR used_messages <= max_messages`; index `(user_id, status)`, `(status, renewal_date)` |
-| `chat_messages` | fields from §5.1; index `(user_id, created_at DESC)` |
+| Table             | Columns / constraints                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `users`           | `id` PK (= Supabase sub), `email`, `role` (`USER`/`ADMIN`), `created_at`                                                             |
+| `device_bindings` | `id`, `user_id` FK, `session_id` UNIQUE, `public_key_jwk` jsonb, `created_at`                                                        |
+| `monthly_usage`   | PK `(user_id, period)`, `free_used`, `free_limit`, `total_messages`; CHECK `free_used BETWEEN 0 AND free_limit`                      |
+| `subscriptions`   | fields from §5.2; CHECK `max_messages IS NULL OR used_messages <= max_messages`; index `(user_id, status)`, `(status, renewal_date)` |
+| `chat_messages`   | fields from §5.1; index `(user_id, created_at DESC)`                                                                                 |
 
 CHECK constraints are added by hand to the generated migration SQL. Nothing is deleted, so history is kept.
 
@@ -217,42 +226,49 @@ CHECK constraints are added by hand to the generated migration SQL. Nothing is d
 - Every route needs **bearer token + request signature**, with two exceptions: `POST /v1/auth/device-keys` needs the bearer token only (it is the bootstrap step), and `/health` needs the probe token.
 - List endpoints take `?limit=` (1–50, default 20) and return newest first.
 
-| Method | Path | Roles | Rate group | Notes |
-|--------|------|-------|-----------|-------|
-| POST | `/v1/auth/device-keys` | any (bearer only) | auth | `{ publicKey: JWK }`: EC P-256 with only `kty,crv,x,y`. Creates the user row if missing. Errors: 409 `KEY_ALREADY_BOUND`, 403 `KEY_BINDING_WINDOW_CLOSED` |
-| GET | `/v1/auth/me` | USER, ADMIN | auth | `{ id, email, role }` |
-| POST | `/v1/chat/messages` | USER, ADMIN | chat | `{ question: string 1..4000 }` → 201 `{ id, answer, model, usage, quota:{source, subscriptionId?, freeRemaining, freeResetsAt}, createdAt }`. Error: 402 `QUOTA_EXHAUSTED` |
-| GET | `/v1/chat/messages` | USER, ADMIN | chat | Own history; admin may pass `?userId=` |
-| POST | `/v1/subscriptions` | USER, ADMIN | subscriptions | `{ tier, billingCycle, autoRenew }` → 201, or 402 `PAYMENT_FAILED` |
-| GET | `/v1/subscriptions` | USER, ADMIN | subscriptions | Own; admin may pass `?userId=` |
-| PATCH | `/v1/subscriptions/:id` | USER, ADMIN (owner) | subscriptions | `{ autoRenew }` only |
-| POST | `/v1/subscriptions/:id/cancel` | USER, ADMIN | subscriptions | 409 `SUBSCRIPTION_NOT_ACTIVE` |
-| POST | `/v1/admin/billing/run` | **ADMIN** | admin | Runs a renewal cycle now |
-| GET | `/v1/admin/metrics` | **ADMIN** | admin | `{ users, chat:{ messagesThisMonth, free, bundle, tokensThisMonth }, subscriptions:{ activeByTier, inactiveByReason } }` |
-| GET | `/health` | `X-Health-Token` | ops | DB `SELECT 1` + Redis `PING` |
+| Method | Path                           | Roles               | Rate group    | Notes                                                                                                                                                                      |
+| ------ | ------------------------------ | ------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/v1/auth/device-keys`         | any (bearer only)   | auth          | `{ publicKey: JWK }`: EC P-256 with only `kty,crv,x,y`. Creates the user row if missing. Errors: 409 `KEY_ALREADY_BOUND`, 403 `KEY_BINDING_WINDOW_CLOSED`                  |
+| GET    | `/v1/auth/me`                  | USER, ADMIN         | auth          | `{ id, email, role }`                                                                                                                                                      |
+| POST   | `/v1/chat/messages`            | USER, ADMIN         | chat          | `{ question: string 1..4000 }` → 201 `{ id, answer, model, usage, quota:{source, subscriptionId?, freeRemaining, freeResetsAt}, createdAt }`. Error: 402 `QUOTA_EXHAUSTED` |
+| GET    | `/v1/chat/messages`            | USER, ADMIN         | chat          | Own history; admin may pass `?userId=`                                                                                                                                     |
+| POST   | `/v1/subscriptions`            | USER, ADMIN         | subscriptions | `{ tier, billingCycle, autoRenew }` → 201, or 402 `PAYMENT_FAILED`                                                                                                         |
+| GET    | `/v1/subscriptions`            | USER, ADMIN         | subscriptions | Own; admin may pass `?userId=`                                                                                                                                             |
+| PATCH  | `/v1/subscriptions/:id`        | USER, ADMIN (owner) | subscriptions | `{ autoRenew }` only                                                                                                                                                       |
+| POST   | `/v1/subscriptions/:id/cancel` | USER, ADMIN         | subscriptions | 409 `SUBSCRIPTION_NOT_ACTIVE`                                                                                                                                              |
+| POST   | `/v1/admin/billing/run`        | **ADMIN**           | admin         | Runs a renewal cycle now                                                                                                                                                   |
+| GET    | `/v1/admin/metrics`            | **ADMIN**           | admin         | `{ users, chat:{ messagesThisMonth, free, bundle, tokensThisMonth }, subscriptions:{ activeByTier, inactiveByReason } }`                                                   |
+| GET    | `/health`                      | `X-Health-Token`    | ops           | DB `SELECT 1` + Redis `PING`                                                                                                                                               |
 
 **Error envelope** (every non-2xx response):
 
 ```json
-{ "error": { "code": "QUOTA_EXHAUSTED", "message": "…", "details": { "freeUsed": 3, "freeLimit": 3, "freeResetsAt": "2026-10-01T00:00:00.000Z" }, "requestId": "…" } }
+{
+  "error": {
+    "code": "QUOTA_EXHAUSTED",
+    "message": "…",
+    "details": { "freeUsed": 3, "freeLimit": 3, "freeResetsAt": "2026-10-01T00:00:00.000Z" },
+    "requestId": "…"
+  }
+}
 ```
 
 `ApiErrorCode` is an exported string-literal union:
 
-| Status | Codes |
-|--------|-------|
-| 400 | `VALIDATION_FAILED` (issue paths, submitted values not echoed) |
-| 401 | `UNAUTHENTICATED`, `INVALID_TOKEN`, `TOKEN_EXPIRED`, `SIGNATURE_REQUIRED`, `INVALID_SIGNATURE`, `KEY_NOT_BOUND`, `REQUEST_EXPIRED`, `REPLAY_DETECTED` |
-| 402 | `QUOTA_EXHAUSTED`, `PAYMENT_FAILED` |
-| 403 | `FORBIDDEN`, `KEY_BINDING_WINDOW_CLOSED` |
-| 404 | `NOT_FOUND` |
-| 409 | `KEY_ALREADY_BOUND`, `SUBSCRIPTION_NOT_ACTIVE` |
-| 413 | `PAYLOAD_TOO_LARGE` |
-| 415 | `UNSUPPORTED_MEDIA_TYPE` |
-| 429 | `RATE_LIMITED` (+ `Retry-After`) |
-| 503 | `SERVICE_UNAVAILABLE` |
-| 504 | `REQUEST_TIMEOUT` |
-| 500 | `INTERNAL_ERROR` |
+| Status | Codes                                                                                                                                                 |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | `VALIDATION_FAILED` (issue paths, submitted values not echoed)                                                                                        |
+| 401    | `UNAUTHENTICATED`, `INVALID_TOKEN`, `TOKEN_EXPIRED`, `SIGNATURE_REQUIRED`, `INVALID_SIGNATURE`, `KEY_NOT_BOUND`, `REQUEST_EXPIRED`, `REPLAY_DETECTED` |
+| 402    | `QUOTA_EXHAUSTED`, `PAYMENT_FAILED`                                                                                                                   |
+| 403    | `FORBIDDEN`, `KEY_BINDING_WINDOW_CLOSED`                                                                                                              |
+| 404    | `NOT_FOUND`                                                                                                                                           |
+| 409    | `KEY_ALREADY_BOUND`, `SUBSCRIPTION_NOT_ACTIVE`                                                                                                        |
+| 413    | `PAYLOAD_TOO_LARGE`                                                                                                                                   |
+| 415    | `UNSUPPORTED_MEDIA_TYPE`                                                                                                                              |
+| 429    | `RATE_LIMITED` (+ `Retry-After`)                                                                                                                      |
+| 503    | `SERVICE_UNAVAILABLE`                                                                                                                                 |
+| 504    | `REQUEST_TIMEOUT`                                                                                                                                     |
+| 500    | `INTERNAL_ERROR`                                                                                                                                      |
 
 Domain errors carry a `code`, and one global exception filter maps them to HTTP responses.
 
@@ -283,6 +299,7 @@ Node server (requestTimeout, headersTimeout)
 ### 8.2 Request signing
 
 **Client** (`scripts/client.ts` and the test signer):
+
 1. Log in to Supabase with `supabase-js`.
 2. Generate a P-256 key pair.
 3. Call `POST /v1/auth/device-keys`.
@@ -296,6 +313,7 @@ GGI-SIG-V1\n{METHOD}\n{originalUrl}\n{timestamp}\n{nonce}\n{base64url sha256(raw
 ```
 
 **Server checks, in order:**
+
 1. Bearer token present.
 2. `jose.jwtVerify` with the remote JWKS:
    - `iss = ${SUPABASE_URL}/auth/v1`, `aud = authenticated`, algorithms `ES256`/`RS256`, 5s clock tolerance;
@@ -352,22 +370,23 @@ The result of each payment is logged. Each run advances one cycle.
 
 ## 9. Security model
 
-| Requirement | Mechanism |
-|-------------|-----------|
-| External OIDC, email/password + OAuth, no custom auth | Supabase Auth; the app never handles passwords |
-| Server-side verification (iss/aud/exp) | `jose` + remote JWKS, pinned algorithms |
-| Token alone not sufficient | Session-bound request signing + timestamp + single-use nonce |
-| RBAC, controller level | `RolesGuard` + `@Roles` |
-| RBAC, domain level | `ChatAccessPolicy`, `SubscriptionAccessPolicy`, `KeyBindingPolicy` inside use cases |
-| Headers / CORS / size / content type / timeout | §8.1 |
-| Rate limits (per minute, env-overridable) | auth 20/IP, 10/user · chat 60/IP, 20/user · subscriptions 60/IP, 30/user · admin 60/60 · ops 30/IP |
-| Schema validation, unknown fields rejected | Zod `.strict()` on body and query; UUID params validated |
-| XSS | JSON-only API, CSP `default-src 'none'`, nosniff; free text stripped of HTML before storage |
-| Injection | Prisma parameterized queries; ESLint bans `$queryRawUnsafe`/`$executeRawUnsafe` |
-| Mass assignment | Explicit DTO-to-command mapping; `userId` always from `Actor`; PATCH accepts only `autoRenew` |
-| Config | Zod-validated env; the app refuses to boot if config is invalid; `.env.example` only |
+| Requirement                                           | Mechanism                                                                                          |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| External OIDC, email/password + OAuth, no custom auth | Supabase Auth; the app never handles passwords                                                     |
+| Server-side verification (iss/aud/exp)                | `jose` + remote JWKS, pinned algorithms                                                            |
+| Token alone not sufficient                            | Session-bound request signing + timestamp + single-use nonce                                       |
+| RBAC, controller level                                | `RolesGuard` + `@Roles`                                                                            |
+| RBAC, domain level                                    | `ChatAccessPolicy`, `SubscriptionAccessPolicy`, `KeyBindingPolicy` inside use cases                |
+| Headers / CORS / size / content type / timeout        | §8.1                                                                                               |
+| Rate limits (per minute, env-overridable)             | auth 20/IP, 10/user · chat 60/IP, 20/user · subscriptions 60/IP, 30/user · admin 60/60 · ops 30/IP |
+| Schema validation, unknown fields rejected            | Zod `.strict()` on body and query; UUID params validated                                           |
+| XSS                                                   | JSON-only API, CSP `default-src 'none'`, nosniff; free text stripped of HTML before storage        |
+| Injection                                             | Prisma parameterized queries; ESLint bans `$queryRawUnsafe`/`$executeRawUnsafe`                    |
+| Mass assignment                                       | Explicit DTO-to-command mapping; `userId` always from `Actor`; PATCH accepts only `autoRenew`      |
+| Config                                                | Zod-validated env; the app refuses to boot if config is invalid; `.env.example` only               |
 
 **Residual risks (in the README):**
+
 - **Trust on first use when binding a key.** A token stolen within 5 minutes of login, before the client binds its key, could be bound by an attacker. The real client then gets `KEY_ALREADY_BOUND`, which can be detected. DPoP-capable IdPs would close this gap.
 - **Signatures cover `originalUrl`.** A proxy must not rewrite paths.
 
@@ -390,6 +409,7 @@ The result of each payment is logged. Each run advances one cycle.
 ## 12. Testing (only what the PDF requires, plus the concurrency proof)
 
 **Unit** (pure domain, no I/O):
+
 - `QuotaAllocator` and `UsagePeriod`:
   - free first;
   - free exhausted → latest bundle;
@@ -401,6 +421,7 @@ The result of each payment is logged. Each run advances one cycle.
 - Policies and `SignatureVerifier` (tampered fields are rejected).
 
 **Integration** (supertest + real Postgres/Redis from `compose.yaml`):
+
 - **Mock IdP, not bypassed:** a local HTTP server serves a JWKS for a generated ES256 key and mints Supabase-shaped tokens. The app's real verifier fetches from it.
 - **Authenticated access:**
   - no token, wrong issuer, wrong audience, expired, `alg:none` → 401;
@@ -419,23 +440,23 @@ The result of each payment is logged. Each run advances one cycle.
 
 ## 13. Requirements traceability
 
-| PDF requirement | Where |
-|-----------------|-------|
-| TS, REST, DDD, relational DB | §2, §4 |
-| Chat endpoint, mocked OpenAI, stored question/answer/tokens/metadata | §7, §8.3, §8.4 |
-| Monthly usage, 3 free, reset on the 1st | A2, `monthly_usage` |
-| Multiple bundles, tiers, latest-remaining deduction, typed errors | §5, A1, §7 |
-| Simulated latency; atomic, concurrency-safe transactional deduction | §8.3, §8.4 |
-| Subscription create, cycles, auto-renew, required fields | §5.2, §7 |
-| Auto-renew, random payment failure → inactive, cancellation keeps history | §5.2, §8.5, A4–A6 |
-| External OIDC + OAuth, no custom auth; token verification; extra mechanism | §8.2 |
-| RBAC at controller + domain level | §8.1, §5 |
-| Headers, CORS, size, content type, timeout, rate limits, validation, XSS, injection, mass assignment | §9 |
-| Clean Architecture, `chat/` + `subscriptions/` | §4 |
-| Strict TS, migrations, env config, ESLint + Prettier | §6, §11, §12 |
-| Central errors, structured logs, health, metrics | §7, §10 |
-| Unit and integration tests, IdP mocked | §12 |
-| Public repo, README, PDF | §15 |
+| PDF requirement                                                                                      | Where               |
+| ---------------------------------------------------------------------------------------------------- | ------------------- |
+| TS, REST, DDD, relational DB                                                                         | §2, §4              |
+| Chat endpoint, mocked OpenAI, stored question/answer/tokens/metadata                                 | §7, §8.3, §8.4      |
+| Monthly usage, 3 free, reset on the 1st                                                              | A2, `monthly_usage` |
+| Multiple bundles, tiers, latest-remaining deduction, typed errors                                    | §5, A1, §7          |
+| Simulated latency; atomic, concurrency-safe transactional deduction                                  | §8.3, §8.4          |
+| Subscription create, cycles, auto-renew, required fields                                             | §5.2, §7            |
+| Auto-renew, random payment failure → inactive, cancellation keeps history                            | §5.2, §8.5, A4–A6   |
+| External OIDC + OAuth, no custom auth; token verification; extra mechanism                           | §8.2                |
+| RBAC at controller + domain level                                                                    | §8.1, §5            |
+| Headers, CORS, size, content type, timeout, rate limits, validation, XSS, injection, mass assignment | §9                  |
+| Clean Architecture, `chat/` + `subscriptions/`                                                       | §4                  |
+| Strict TS, migrations, env config, ESLint + Prettier                                                 | §6, §11, §12        |
+| Central errors, structured logs, health, metrics                                                     | §7, §10             |
+| Unit and integration tests, IdP mocked                                                               | §12                 |
+| Public repo, README, PDF                                                                             | §15                 |
 
 ---
 

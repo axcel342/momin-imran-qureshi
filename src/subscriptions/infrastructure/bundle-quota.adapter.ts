@@ -2,7 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { BundleQuotaPort, BundleSnapshot } from '../../chat/domain/ports';
 import { DomainError } from '../../shared/domain/errors';
 import type { Subscription } from '../domain/entities/subscription';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 const toSnapshot = (s: Subscription): BundleSnapshot => ({
   id: s.id,

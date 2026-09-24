@@ -7,8 +7,18 @@ import { CLOCK, type Clock } from '../../shared/domain/clock';
 import { DomainError } from '../../shared/domain/errors';
 import { AUTH_MODE_KEY, type AuthMode } from '../../shared/http/decorators';
 import { SignatureVerifier } from '../domain/services/signature';
-import { KEY_CRYPTO, NONCE_STORE, TOKEN_VERIFIER, type KeyCrypto, type NonceStore, type TokenVerifier } from '../domain/ports';
-import { DEVICE_BINDING_REPOSITORY, type DeviceBindingRepository } from '../repositories/device-binding.repository';
+import {
+  KEY_CRYPTO,
+  NONCE_STORE,
+  TOKEN_VERIFIER,
+  type KeyCrypto,
+  type NonceStore,
+  type TokenVerifier,
+} from '../domain/ports';
+import {
+  DEVICE_BINDING_REPOSITORY,
+  type DeviceBindingRepository,
+} from '../repositories/device-binding.repository';
 
 const sha256 = (data: string | Buffer) => createHash('sha256').update(data).digest();
 const b64url = (data: string | Buffer) => sha256(data).toString('base64url');
@@ -33,7 +43,11 @@ export class AuthGuard implements CanActivate {
   }
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const mode = this.reflector.getAllAndOverride<AuthMode | undefined>(AUTH_MODE_KEY, [ctx.getHandler(), ctx.getClass()]) ?? 'signed';
+    const mode =
+      this.reflector.getAllAndOverride<AuthMode | undefined>(AUTH_MODE_KEY, [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ]) ?? 'signed';
     const req = ctx.switchToHttp().getRequest<Request>();
 
     if (mode === 'health-probe') {
@@ -55,13 +69,21 @@ export class AuthGuard implements CanActivate {
     const timestamp = req.header('x-signature-timestamp');
     const nonce = req.header('x-signature-nonce');
     const signature = req.header('x-signature');
-    if (!timestamp || !nonce || !signature || !TS_RE.test(timestamp) || !NONCE_RE.test(nonce) || !SIG_RE.test(signature)) {
+    if (
+      !timestamp ||
+      !nonce ||
+      !signature ||
+      !TS_RE.test(timestamp) ||
+      !NONCE_RE.test(nonce) ||
+      !SIG_RE.test(signature)
+    ) {
       throw new DomainError('SIGNATURE_REQUIRED', 'Request signature headers are missing or malformed');
     }
     this.verifier.assertFresh(timestamp, this.clock.now());
 
     const bound = await this.bindings.findBoundSession(verified.sessionId);
-    if (!bound || bound.userId !== verified.userId) throw new DomainError('KEY_NOT_BOUND', 'No key is bound to this session');
+    if (!bound || bound.userId !== verified.userId)
+      throw new DomainError('KEY_NOT_BOUND', 'No key is bound to this session');
 
     this.verifier.assertValid(
       {

@@ -20,7 +20,12 @@ export class EcdsaKeyCrypto implements KeyCrypto {
     if (!isP256PublicJwk(key)) return false;
     try {
       const publicKey = createPublicKey({ key: key as JsonWebKey, format: 'jwk' });
-      return verify('sha256', Buffer.from(data), { key: publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(signatureB64Url, 'base64url'));
+      return verify(
+        'sha256',
+        Buffer.from(data),
+        { key: publicKey, dsaEncoding: 'ieee-p1363' },
+        Buffer.from(signatureB64Url, 'base64url'),
+      );
     } catch {
       return false;
     }

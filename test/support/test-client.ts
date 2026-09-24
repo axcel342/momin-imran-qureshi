@@ -28,13 +28,23 @@ export class TestClient {
     const email = `${userId.slice(0, 8)}@example.com`;
     const token = await ctx.idp.token({ userId, sessionId, email });
     const { privateKey, publicKeyJwk } = newKeyPair();
-    const res = await request(ctx.http).post('/v1/auth/device-keys').set('Authorization', `Bearer ${token}`).send({ publicKey: publicKeyJwk });
-    if (res.status !== 201) throw new Error(`device-key registration failed: ${res.status} ${JSON.stringify(res.body)}`);
-    if (opts.role === 'ADMIN') await ctx.prisma.user.update({ where: { id: userId }, data: { role: 'ADMIN' } });
+    const res = await request(ctx.http)
+      .post('/v1/auth/device-keys')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ publicKey: publicKeyJwk });
+    if (res.status !== 201)
+      throw new Error(`device-key registration failed: ${res.status} ${JSON.stringify(res.body)}`);
+    if (opts.role === 'ADMIN')
+      await ctx.prisma.user.update({ where: { id: userId }, data: { role: 'ADMIN' } });
     return new TestClient(ctx, userId, email, sessionId, token, privateKey, publicKeyJwk);
   }
 
-  headers(method: string, url: string, rawBody = '', overrides: { timestamp?: number; nonce?: string; token?: string } = {}) {
+  headers(
+    method: string,
+    url: string,
+    rawBody = '',
+    overrides: { timestamp?: number; nonce?: string; token?: string } = {},
+  ) {
     const { token = this.token, ...rest } = overrides;
     return signRequest({ method, url, rawBody, token, privateKey: this.privateKey, ...rest });
   }
@@ -45,12 +55,18 @@ export class TestClient {
 
   post(url: string, body?: unknown): Test {
     const raw = body === undefined ? '' : JSON.stringify(body);
-    const req = request(this.ctx.http).post(url).set(this.headers('POST', url, raw));
+    const req = request(this.ctx.http)
+      .post(url)
+      .set(this.headers('POST', url, raw));
     return body === undefined ? req : req.set('Content-Type', 'application/json').send(raw);
   }
 
   patch(url: string, body: unknown): Test {
     const raw = JSON.stringify(body);
-    return request(this.ctx.http).patch(url).set(this.headers('PATCH', url, raw)).set('Content-Type', 'application/json').send(raw);
+    return request(this.ctx.http)
+      .patch(url)
+      .set(this.headers('PATCH', url, raw))
+      .set('Content-Type', 'application/json')
+      .send(raw);
   }
 }

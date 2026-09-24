@@ -10,6 +10,16 @@ import { RedisModule } from './shared/redis/redis.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), CoreModule, PrismaModule, RedisModule, HttpPlatformModule, AuthModule, SubscriptionsModule, ChatModule, ObservabilityModule],
+  imports: [
+    ScheduleModule.forRoot(),
+    CoreModule,
+    PrismaModule,
+    RedisModule,
+    HttpPlatformModule,
+    AuthModule,
+    SubscriptionsModule,
+    ChatModule,
+    ObservabilityModule,
+  ],
 })
 export class AppModule {}

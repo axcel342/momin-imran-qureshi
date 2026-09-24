@@ -4,7 +4,10 @@ import type { Actor } from '../../shared/domain/actor';
 import { assertAdmin } from '../../shared/domain/admin-policy';
 import { CLOCK, type Clock } from '../../shared/domain/clock';
 import { PAYMENT_GATEWAY, type PaymentGateway } from '../domain/ports';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 export interface BillingSummary {
   processed: number;
@@ -35,14 +38,24 @@ export class RunBillingCycleUseCase {
       const count = await this.tx.run(async () => {
         const due = await this.subs.lockDueForRenewal(now, BATCH_SIZE);
         for (const sub of due) {
-          const payment = sub.autoRenew ? await this.payments.charge({ subscriptionId: sub.id, userId: sub.userId, amountCents: sub.priceCents }) : undefined;
+          const payment = sub.autoRenew
+            ? await this.payments.charge({
+                subscriptionId: sub.id,
+                userId: sub.userId,
+                amountCents: sub.priceCents,
+              })
+            : undefined;
           sub.renew(now, payment?.ok);
           await this.subs.save(sub);
           summary.processed++;
           if (!payment) summary.expired++;
           else if (payment.ok) summary.renewed++;
           else summary.failed++;
-          this.logger.log({ msg: 'subscription billed', subscriptionId: sub.id, outcome: payment ? (payment.ok ? 'renewed' : 'payment_failed') : 'expired' });
+          this.logger.log({
+            msg: 'subscription billed',
+            subscriptionId: sub.id,
+            outcome: payment ? (payment.ok ? 'renewed' : 'payment_failed') : 'expired',
+          });
         }
         return due.length;
       });

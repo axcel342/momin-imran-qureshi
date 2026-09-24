@@ -23,7 +23,10 @@ export class AuthController {
   @Post('device-keys')
   @HttpCode(201)
   @BearerOnly()
-  register(@CurrentToken() token: VerifiedToken, @Body(new ZodValidationPipe(registerSchema)) body: z.infer<typeof registerSchema>) {
+  register(
+    @CurrentToken() token: VerifiedToken,
+    @Body(new ZodValidationPipe(registerSchema)) body: z.infer<typeof registerSchema>,
+  ) {
     return this.registerKey.execute(token, body.publicKey);
   }
 

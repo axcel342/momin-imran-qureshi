@@ -35,13 +35,16 @@ export class SupabaseTokenVerifier implements TokenVerifier {
         requiredClaims: ['sub', 'exp', 'iat'],
       }));
     } catch (err) {
-      if (err instanceof errors.JWTExpired) throw new DomainError('TOKEN_EXPIRED', 'Access token has expired');
-      if (err instanceof errors.JWKSTimeout) throw new DomainError('SERVICE_UNAVAILABLE', 'Identity provider unavailable');
+      if (err instanceof errors.JWTExpired)
+        throw new DomainError('TOKEN_EXPIRED', 'Access token has expired');
+      if (err instanceof errors.JWKSTimeout)
+        throw new DomainError('SERVICE_UNAVAILABLE', 'Identity provider unavailable');
       if (err instanceof errors.JOSEError) throw new DomainError('INVALID_TOKEN', 'Access token is invalid');
       throw new DomainError('SERVICE_UNAVAILABLE', 'Identity provider unavailable');
     }
     const claims = claimsSchema.safeParse(payload);
-    if (!claims.success || claims.data.is_anonymous === true) throw new DomainError('INVALID_TOKEN', 'Access token is invalid');
+    if (!claims.success || claims.data.is_anonymous === true)
+      throw new DomainError('INVALID_TOKEN', 'Access token is invalid');
     const times = (claims.data.amr ?? []).map((a) => a.timestamp);
     return {
       userId: claims.data.sub,

@@ -37,7 +37,11 @@ export class MockOpenAiAdapter implements AiCompletionPort {
       id: raw.id,
       model: raw.model,
       content,
-      usage: { promptTokens: raw.usage.prompt_tokens, completionTokens: raw.usage.completion_tokens, totalTokens: raw.usage.total_tokens },
+      usage: {
+        promptTokens: raw.usage.prompt_tokens,
+        completionTokens: raw.usage.completion_tokens,
+        totalTokens: raw.usage.total_tokens,
+      },
       latencyMs: Date.now() - started,
     };
   }

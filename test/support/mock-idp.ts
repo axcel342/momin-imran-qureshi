@@ -71,6 +71,10 @@ export class MockIdp {
   }
 
   async stop(): Promise<void> {
-    await new Promise<void>((resolve) => this.server.close(() => { resolve(); }));
+    await new Promise<void>((resolve) =>
+      this.server.close(() => {
+        resolve();
+      }),
+    );
   }
 }

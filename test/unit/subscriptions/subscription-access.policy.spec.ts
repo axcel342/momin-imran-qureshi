@@ -1,17 +1,34 @@
 import type { Actor } from '../../../src/shared/domain/actor';
 import { Subscription } from '../../../src/subscriptions/domain/entities/subscription';
-import { accessDenied, SubscriptionAccessPolicy as P } from '../../../src/subscriptions/domain/policies/subscription-access.policy';
+import {
+  accessDenied,
+  SubscriptionAccessPolicy as P,
+} from '../../../src/subscriptions/domain/policies/subscription-access.policy';
 
 const owner: Actor = { userId: 'u1', role: 'USER', sessionId: 's' };
 const other: Actor = { userId: 'u2', role: 'USER', sessionId: 's' };
 const admin: Actor = { userId: 'a1', role: 'ADMIN', sessionId: 's' };
-const sub = Subscription.create({ id: 'x', userId: 'u1', tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true, paymentSucceeded: true, now: new Date() });
+const sub = Subscription.create({
+  id: 'x',
+  userId: 'u1',
+  tier: 'BASIC',
+  billingCycle: 'MONTHLY',
+  autoRenew: true,
+  paymentSucceeded: true,
+  now: new Date(),
+});
 
 describe('SubscriptionAccessPolicy', () => {
   it.each([
-    ['canView', owner, true], ['canView', other, false], ['canView', admin, true],
-    ['canCancel', owner, true], ['canCancel', other, false], ['canCancel', admin, true],
-    ['canSetAutoRenew', owner, true], ['canSetAutoRenew', other, false], ['canSetAutoRenew', admin, false],
+    ['canView', owner, true],
+    ['canView', other, false],
+    ['canView', admin, true],
+    ['canCancel', owner, true],
+    ['canCancel', other, false],
+    ['canCancel', admin, true],
+    ['canSetAutoRenew', owner, true],
+    ['canSetAutoRenew', other, false],
+    ['canSetAutoRenew', admin, false],
   ] as const)('%s for %o is %s', (rule, actor, expected) => {
     expect(P[rule](actor, sub)).toBe(expected);
   });

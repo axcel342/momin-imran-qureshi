@@ -19,9 +19,18 @@ export class MetricsQuery {
     const period = UsagePeriod.fromDate(now).value;
     const [users, chat, active, inactive] = await Promise.all([
       this.prisma.user.count(),
-      this.prisma.chatMessage.groupBy({ by: ['quotaSource'], where: { period }, _count: { _all: true }, _sum: { totalTokens: true } }),
+      this.prisma.chatMessage.groupBy({
+        by: ['quotaSource'],
+        where: { period },
+        _count: { _all: true },
+        _sum: { totalTokens: true },
+      }),
       this.prisma.subscription.groupBy({ by: ['tier'], where: { status: 'ACTIVE' }, _count: { _all: true } }),
-      this.prisma.subscription.groupBy({ by: ['inactiveReason'], where: { status: 'INACTIVE' }, _count: { _all: true } }),
+      this.prisma.subscription.groupBy({
+        by: ['inactiveReason'],
+        where: { status: 'INACTIVE' },
+        _count: { _all: true },
+      }),
     ]);
     const bySource = (s: 'FREE' | 'BUNDLE') => chat.find((c) => c.quotaSource === s);
     const activeByTier = { BASIC: 0, PRO: 0, ENTERPRISE: 0 };

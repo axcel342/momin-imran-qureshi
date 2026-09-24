@@ -8,7 +8,12 @@ import { RATE_LIMIT_GROUP_KEY } from './decorators';
 
 function groupOf(reflector: Reflector, ctx: ExecutionContext): RateGroup {
   // Routes that forget to declare a group get the strictest limits.
-  return reflector.getAllAndOverride<RateGroup | undefined>(RATE_LIMIT_GROUP_KEY, [ctx.getHandler(), ctx.getClass()]) ?? 'auth';
+  return (
+    reflector.getAllAndOverride<RateGroup | undefined>(RATE_LIMIT_GROUP_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]) ?? 'auth'
+  );
 }
 
 async function enforce(limiter: RateLimiter, res: Response, key: string, limit: number): Promise<void> {
@@ -29,7 +34,12 @@ export class IpRateLimitGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const group = groupOf(this.reflector, ctx);
     const req = ctx.switchToHttp().getRequest<Request>();
-    await enforce(this.limiter, ctx.switchToHttp().getResponse<Response>(), `rl:ip:${group}:${req.ip ?? 'unknown'}`, RATE_LIMITS[group].perIp);
+    await enforce(
+      this.limiter,
+      ctx.switchToHttp().getResponse<Response>(),
+      `rl:ip:${group}:${req.ip ?? 'unknown'}`,
+      RATE_LIMITS[group].perIp,
+    );
     return true;
   }
 }
@@ -46,7 +56,12 @@ export class UserRateLimitGuard implements CanActivate {
     const userId = req.actor?.userId ?? req.verifiedToken?.userId;
     if (!userId) return true;
     const group = groupOf(this.reflector, ctx);
-    await enforce(this.limiter, ctx.switchToHttp().getResponse<Response>(), `rl:user:${group}:${userId}`, RATE_LIMITS[group].perUser);
+    await enforce(
+      this.limiter,
+      ctx.switchToHttp().getResponse<Response>(),
+      `rl:user:${group}:${userId}`,
+      RATE_LIMITS[group].perUser,
+    );
     return true;
   }
 }

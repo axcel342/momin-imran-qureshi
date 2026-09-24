@@ -1,4 +1,8 @@
-import { canonicalString, SignatureVerifier, type SignedRequestParts } from '../../../src/auth/domain/services/signature';
+import {
+  canonicalString,
+  SignatureVerifier,
+  type SignedRequestParts,
+} from '../../../src/auth/domain/services/signature';
 import type { KeyCrypto, PublicJwk } from '../../../src/auth/domain/ports';
 
 const key: PublicJwk = { kty: 'EC', crv: 'P-256', x: 'x', y: 'y' };

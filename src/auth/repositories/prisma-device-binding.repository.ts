@@ -15,7 +15,9 @@ export class PrismaDeviceBindingRepository implements DeviceBindingRepository {
       where: { sessionId },
       select: { userId: true, publicKeyJwk: true, user: { select: { role: true } } },
     });
-    return row ? { userId: row.userId, role: row.user.role, publicKeyJwk: row.publicKeyJwk as unknown as PublicJwk } : null;
+    return row
+      ? { userId: row.userId, role: row.user.role, publicKeyJwk: row.publicKeyJwk as unknown as PublicJwk }
+      : null;
   }
 
   async existsForSession(sessionId: string): Promise<boolean> {
@@ -25,7 +27,13 @@ export class PrismaDeviceBindingRepository implements DeviceBindingRepository {
   async create(b: DeviceBinding): Promise<void> {
     try {
       await this.tx.db().deviceBinding.create({
-        data: { id: b.id, userId: b.userId, sessionId: b.sessionId, publicKeyJwk: { ...b.publicKeyJwk }, createdAt: b.createdAt },
+        data: {
+          id: b.id,
+          userId: b.userId,
+          sessionId: b.sessionId,
+          publicKeyJwk: { ...b.publicKeyJwk },
+          createdAt: b.createdAt,
+        },
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {

@@ -10,7 +10,11 @@ import { ListSubscriptionsUseCase } from '../application/list-subscriptions.use-
 import { SetAutoRenewUseCase } from '../application/set-auto-renew.use-case';
 import { BILLING_CYCLES, TIERS } from '../domain/value-objects';
 
-const createSchema = z.strictObject({ tier: z.enum(TIERS), billingCycle: z.enum(BILLING_CYCLES), autoRenew: z.boolean() });
+const createSchema = z.strictObject({
+  tier: z.enum(TIERS),
+  billingCycle: z.enum(BILLING_CYCLES),
+  autoRenew: z.boolean(),
+});
 const patchSchema = z.strictObject({ autoRenew: z.boolean() });
 const idPipe = new ZodValidationPipe(z.uuid());
 
@@ -27,7 +31,10 @@ export class SubscriptionsController {
 
   @Post()
   @HttpCode(201)
-  create(@CurrentActor() actor: Actor, @Body(new ZodValidationPipe(createSchema)) body: z.infer<typeof createSchema>) {
+  create(
+    @CurrentActor() actor: Actor,
+    @Body(new ZodValidationPipe(createSchema)) body: z.infer<typeof createSchema>,
+  ) {
     return this.createUc.execute(actor, body);
   }
 
@@ -37,7 +44,11 @@ export class SubscriptionsController {
   }
 
   @Patch(':id')
-  setAutoRenew(@CurrentActor() actor: Actor, @Param('id', idPipe) id: string, @Body(new ZodValidationPipe(patchSchema)) body: z.infer<typeof patchSchema>) {
+  setAutoRenew(
+    @CurrentActor() actor: Actor,
+    @Param('id', idPipe) id: string,
+    @Body(new ZodValidationPipe(patchSchema)) body: z.infer<typeof patchSchema>,
+  ) {
     return this.autoRenewUc.execute(actor, id, body.autoRenew);
   }
 

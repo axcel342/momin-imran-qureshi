@@ -22,7 +22,11 @@ export class ChatController {
 
   @Post('messages')
   @HttpCode(201)
-  async ask(@CurrentActor() actor: Actor, @Req() req: Request, @Body(new ZodValidationPipe(askSchema)) body: z.infer<typeof askSchema>) {
+  async ask(
+    @CurrentActor() actor: Actor,
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(askSchema)) body: z.infer<typeof askSchema>,
+  ) {
     const { message: m, quota } = await this.askUc.execute({
       actor,
       question: body.question,
@@ -34,7 +38,11 @@ export class ChatController {
       question: m.question,
       answer: m.answer,
       model: m.model,
-      usage: { promptTokens: m.promptTokens, completionTokens: m.completionTokens, totalTokens: m.totalTokens },
+      usage: {
+        promptTokens: m.promptTokens,
+        completionTokens: m.completionTokens,
+        totalTokens: m.totalTokens,
+      },
       quota,
       createdAt: m.createdAt,
     };

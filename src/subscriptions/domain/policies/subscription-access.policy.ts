@@ -8,9 +8,12 @@ export const SubscriptionAccessPolicy = {
   canView: (actor: Actor, sub: Subscription): boolean => isAdmin(actor) || owns(actor, sub),
   canCancel: (actor: Actor, sub: Subscription): boolean => isAdmin(actor) || owns(actor, sub),
   canSetAutoRenew: (actor: Actor, sub: Subscription): boolean => owns(actor, sub),
-  canListFor: (actor: Actor, targetUserId: string): boolean => isAdmin(actor) || targetUserId === actor.userId,
+  canListFor: (actor: Actor, targetUserId: string): boolean =>
+    isAdmin(actor) || targetUserId === actor.userId,
 };
 
 /** Non-admins must not learn that someone else's subscription exists. */
 export const accessDenied = (actor: Actor): DomainError =>
-  isAdmin(actor) ? new DomainError('FORBIDDEN', 'Not allowed for this subscription') : new DomainError('NOT_FOUND', 'Subscription not found');
+  isAdmin(actor)
+    ? new DomainError('FORBIDDEN', 'Not allowed for this subscription')
+    : new DomainError('NOT_FOUND', 'Subscription not found');

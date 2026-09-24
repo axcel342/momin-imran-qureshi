@@ -1,6 +1,7 @@
 # Handoff: GGI backend take-home
 
 **Read first:**
+
 1. `GGI - BACKEND TEST POSTURE (1) (1).pdf`, the original requirements.
 2. `docs/superpowers/specs/2026-09-24-ggi-backend-design.md`, the approved design spec (minimal build).
 3. `docs/superpowers/plans/2026-09-24-ggi-backend.md`, the approved implementation plan: 17 test-first tasks.
@@ -9,7 +10,7 @@
 
 - Spec: approved by the user.
 - Plan: written and pushed. **No tasks started.** Start at Task 1.
-- Execution method: not yet confirmed by the user. The recommendation was *native*: one agent implements all tasks in order, then one fresh reviewer checks the whole branch. The tasks form a strict dependency chain, so run them in order.
+- Execution method: not yet confirmed by the user. The recommendation was _native_: one agent implements all tasks in order, then one fresh reviewer checks the whole branch. The tasks form a strict dependency chain, so run them in order.
 - **Deadline:** 24h from receipt of the task, about **2026-09-25 07:40 UTC**. If time runs short, follow the priority order in spec §14 and §15.
 
 ## Decisions already made (do not re-ask)

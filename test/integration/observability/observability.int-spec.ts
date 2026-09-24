@@ -8,7 +8,8 @@ describe('Observability', () => {
   const lines: Record<string, unknown>[] = [];
   const logStream = new Writable({
     write(chunk: Buffer, _enc, cb) {
-      for (const l of chunk.toString().split('\n').filter(Boolean)) lines.push(JSON.parse(l) as Record<string, unknown>);
+      for (const l of chunk.toString().split('\n').filter(Boolean))
+        lines.push(JSON.parse(l) as Record<string, unknown>);
       cb();
     },
   });
@@ -21,7 +22,9 @@ describe('Observability', () => {
 
   it('protects /health with the probe token', async () => {
     expect((await request(ctx.http).get('/health')).status).toBe(401);
-    expect((await request(ctx.http).get('/health').set('X-Health-Token', 'wrong-token-wrong-token')).status).toBe(401);
+    expect(
+      (await request(ctx.http).get('/health').set('X-Health-Token', 'wrong-token-wrong-token')).status,
+    ).toBe(401);
     const ok = await request(ctx.http).get('/health').set('X-Health-Token', ctx.config.HEALTH_CHECK_TOKEN);
     expect(ok.status).toBe(200);
     expect(ok.body).toEqual({ status: 'ok', checks: { database: 'up', redis: 'up' } });
@@ -38,7 +41,10 @@ describe('Observability', () => {
     expect(res.body).toMatchObject({
       users: 2,
       chat: { messagesThisMonth: 1, free: 1, bundle: 0 },
-      subscriptions: { activeByTier: { BASIC: 0, PRO: 1, ENTERPRISE: 0 }, inactiveByReason: { CANCELLED: 0, PAYMENT_FAILED: 0, EXPIRED: 0 } },
+      subscriptions: {
+        activeByTier: { BASIC: 0, PRO: 1, ENTERPRISE: 0 },
+        inactiveByReason: { CANCELLED: 0, PAYMENT_FAILED: 0, EXPIRED: 0 },
+      },
     });
     expect(res.body.chat.tokensThisMonth).toBeGreaterThan(0);
   });
@@ -49,7 +55,12 @@ describe('Observability', () => {
     const res = await user.get('/v1/auth/me');
     await new Promise((r) => setImmediate(r));
     const entry = lines.find((l) => l.path === '/v1/auth/me');
-    expect(entry).toMatchObject({ requestId: res.headers['x-request-id'], userId: user.userId, statusCode: 200, method: 'GET' });
+    expect(entry).toMatchObject({
+      requestId: res.headers['x-request-id'],
+      userId: user.userId,
+      statusCode: 200,
+      method: 'GET',
+    });
     expect(typeof entry?.responseTimeMs).toBe('number');
     expect(JSON.stringify(lines)).not.toContain(user.token);
   });

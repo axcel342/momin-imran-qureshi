@@ -5,11 +5,13 @@
 **Goal:** Build a secure NestJS + Prisma REST backend with a quota-metered mock AI chat module and a subscription-bundle module. It uses Supabase auth with session-bound request signing, and is built within a 24h take-home deadline.
 
 **Architecture:**
+
 - Clean Architecture per module (`auth/`, `chat/`, `subscriptions/`). Pure `domain/{entities,services,policies}`, Nest-aware `application/` use cases, `repositories/` (interface + Prisma implementation), `infrastructure/` adapters and thin `controllers/`.
 - A global guard chain handles authentication and authorization: IP rate limit → token + signature → user rate limit → roles. Domain policies re-check authorization inside the use cases.
 - Quota deduction happens in one Postgres transaction that locks rows, after the mock AI call.
 
 **Tech Stack:**
+
 - Runtime and framework: Node 22, TypeScript 5 (strict), NestJS 11 (Express 5).
 - Data: Prisma 6 + PostgreSQL 16, ioredis + Redis 7.
 - Validation, auth and crypto: Zod 4, jose 5, sanitize-html, helmet 8, pino 9, @nestjs/schedule 6.
@@ -30,13 +32,13 @@
 - Cancellation takes effect immediately: `endDate = now`, `INACTIVE/CANCELLED`, `autoRenew = false`, `renewalDate = null`.
 - Rate limits per 60s window (per IP / per user):
 
-  | Group | Per IP | Per user |
-  |-------|--------|----------|
-  | auth | 20 | 10 |
-  | chat | 60 | 20 |
-  | subscriptions | 60 | 30 |
-  | admin | 60 | 60 |
-  | ops | 30 | 30 |
+  | Group         | Per IP | Per user |
+  | ------------- | ------ | -------- |
+  | auth          | 20     | 10       |
+  | chat          | 60     | 20       |
+  | subscriptions | 60     | 30       |
+  | admin         | 60     | 60       |
+  | ops           | 30     | 30       |
 
 - JSON body limit **16kb**. Request timeout `REQUEST_TIMEOUT_MS` (default **10000**) → 504 `REQUEST_TIMEOUT`.
 - Request signature:
@@ -54,7 +56,7 @@ These are inputs the spec implies but that the per-feature happy/sad-path tests 
    - `<b></b>` is rejected with 400.
    - Emoji text is accepted unchanged.
    - Pinned in Task 12.
-2. **A client clock ahead of the server.** A timestamp 120s in the *future* must be rejected (`REQUEST_EXPIRED`), not only stale ones. Pinned in Task 5 (unit) and Task 7 (integration).
+2. **A client clock ahead of the server.** A timestamp 120s in the _future_ must be rejected (`REQUEST_EXPIRED`), not only stale ones. Pinned in Task 5 (unit) and Task 7 (integration).
 3. **A cancelled or expired bundle while the free quota is exhausted.** It must never be charged; the user gets 402 `QUOTA_EXHAUSTED`. Pinned in Task 12.
 4. **Malformed list query parameters.** `?limit=abc`, `?limit=0`, `?limit=500` and `?userId=not-a-uuid` get 400 `VALIDATION_FAILED`, never 500. Pinned in Task 9.
 5. **Registering a JWK that carries private key material (`d`) or an off-curve point.** Rejected with 400, and no binding is created. Pinned in Task 7.
@@ -118,11 +120,13 @@ test/unit/**.spec.ts, test/integration/**.int-spec.ts
 ### Task 1: Project scaffold, tooling, env config
 
 **Files:**
+
 - Create: `package.json`, `tsconfig.json`, `tsconfig.build.json`, `nest-cli.json`, `eslint.config.mjs`, `.prettierrc`, `.prettierignore`, `.gitignore`, `.env.example`, `compose.yaml`, `docker/postgres-init.sql`, `jest.unit.config.js`, `jest.int.config.js`, `src/config/env.ts`, `src/shared/core.module.ts`, `src/shared/domain/clock.ts`
 - Test: `test/unit/config/env.spec.ts`
 - Also commit: `GGI - BACKEND TEST POSTURE (1) (1).pdf`
 
 **Interfaces:**
+
 - Produces:
   - `envSchema`
   - `type AppConfig`
@@ -180,6 +184,7 @@ Then set these fields in `package.json` (keep the generated `dependencies`/`devD
 - [ ] **Step 2: Write TypeScript, Nest CLI, lint and format config**
 
 `tsconfig.json`:
+
 ```json
 {
   "compilerOptions": {
@@ -206,6 +211,7 @@ Then set these fields in `package.json` (keep the generated `dependencies`/`devD
 ```
 
 `tsconfig.build.json`:
+
 ```json
 {
   "extends": "./tsconfig.json",
@@ -215,11 +221,17 @@ Then set these fields in `package.json` (keep the generated `dependencies`/`devD
 ```
 
 `nest-cli.json`:
+
 ```json
-{ "collection": "@nestjs/schematics", "sourceRoot": "src", "compilerOptions": { "tsConfigPath": "tsconfig.build.json", "deleteOutDir": true } }
+{
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": { "tsConfigPath": "tsconfig.build.json", "deleteOutDir": true }
+}
 ```
 
 `eslint.config.mjs`:
+
 ```js
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
@@ -251,7 +263,16 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@nestjs/*', '@prisma/*', 'express', 'ioredis', '**/application/**', '**/repositories/**', '**/infrastructure/**', '**/controllers/**'],
+              group: [
+                '@nestjs/*',
+                '@prisma/*',
+                'express',
+                'ioredis',
+                '**/application/**',
+                '**/repositories/**',
+                '**/infrastructure/**',
+                '**/controllers/**',
+              ],
               message: 'Domain layer must stay framework-free.',
             },
           ],
@@ -274,11 +295,13 @@ export default tseslint.config(
 ```
 
 `.prettierrc`:
+
 ```json
 { "singleQuote": true, "trailingComma": "all", "printWidth": 110 }
 ```
 
 `.prettierignore`:
+
 ```
 dist
 coverage
@@ -289,6 +312,7 @@ package-lock.json
 ```
 
 `.gitignore`:
+
 ```
 node_modules/
 dist/
@@ -300,6 +324,7 @@ coverage/
 - [ ] **Step 3: Write the local infrastructure files**
 
 `compose.yaml`:
+
 ```yaml
 services:
   postgres:
@@ -320,11 +345,13 @@ volumes:
 ```
 
 `docker/postgres-init.sql`:
+
 ```sql
 CREATE DATABASE ggi_test;
 ```
 
 `.env.example`:
+
 ```
 NODE_ENV=development
 PORT=3000
@@ -353,6 +380,7 @@ API_BASE_URL=http://localhost:3000
 ```
 
 `jest.unit.config.js`:
+
 ```js
 /** @type {import('jest').Config} */
 module.exports = {
@@ -364,6 +392,7 @@ module.exports = {
 ```
 
 `jest.int.config.js`:
+
 ```js
 /** @type {import('jest').Config} */
 module.exports = {
@@ -380,6 +409,7 @@ module.exports = {
 - [ ] **Step 4: Write the failing env-config test**
 
 `test/unit/config/env.spec.ts`:
+
 ```ts
 import { loadConfig } from '../../../src/config/env';
 
@@ -403,7 +433,12 @@ describe('loadConfig', () => {
   });
 
   it('parses CSV origins, booleans and numbers', () => {
-    const c = loadConfig({ ...base, CORS_ORIGINS: 'https://a.com, https://b.com', TRUST_PROXY: 'true', PORT: '8080' });
+    const c = loadConfig({
+      ...base,
+      CORS_ORIGINS: 'https://a.com, https://b.com',
+      TRUST_PROXY: 'true',
+      PORT: '8080',
+    });
     expect(c.CORS_ORIGINS).toEqual(['https://a.com', 'https://b.com']);
     expect(c.TRUST_PROXY).toBe(true);
     expect(c.PORT).toBe(8080);
@@ -423,9 +458,9 @@ describe('loadConfig', () => {
   });
 
   it('rejects max latency below min latency', () => {
-    expect(() => loadConfig({ ...base, AI_MOCK_MIN_LATENCY_MS: '500', AI_MOCK_MAX_LATENCY_MS: '100' })).toThrow(
-      /AI_MOCK_MAX_LATENCY_MS/,
-    );
+    expect(() =>
+      loadConfig({ ...base, AI_MOCK_MIN_LATENCY_MS: '500', AI_MOCK_MAX_LATENCY_MS: '100' }),
+    ).toThrow(/AI_MOCK_MAX_LATENCY_MS/);
   });
 });
 ```
@@ -438,6 +473,7 @@ Expected: FAIL, "Cannot find module '../../../src/config/env'".
 - [ ] **Step 6: Implement the config, clock and core module**
 
 `src/config/env.ts`:
+
 ```ts
 import { z } from 'zod';
 
@@ -455,7 +491,8 @@ const bool = z
   .optional()
   .transform((v) => v === 'true');
 const optionalUrl = z.preprocess((v) => (v === '' ? undefined : v), z.url().optional());
-const int = (def: number, min = 0, max = Number.MAX_SAFE_INTEGER) => z.coerce.number().int().min(min).max(max).default(def);
+const int = (def: number, min = 0, max = Number.MAX_SAFE_INTEGER) =>
+  z.coerce.number().int().min(min).max(max).default(def);
 
 export const envSchema = z
   .object({
@@ -496,6 +533,7 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
 ```
 
 `src/shared/domain/clock.ts`:
+
 ```ts
 export interface Clock {
   now(): Date;
@@ -505,6 +543,7 @@ export const CLOCK = Symbol('CLOCK');
 ```
 
 `src/shared/core.module.ts`:
+
 ```ts
 import { Global, Module } from '@nestjs/common';
 import { APP_CONFIG, loadConfig } from '../config/env';
@@ -529,11 +568,13 @@ Expected: PASS (5 tests). If the "not.toThrow(/short-secret/)" assertion fails, 
 - [ ] **Step 8: Start local Postgres and Redis**
 
 This machine has Podman without a compose provider, so install `podman-compose` once:
+
 ```bash
 pip3 install --user podman-compose
 COMPOSE=podman-compose npm run db:up
 podman ps --format '{{.Names}} {{.Status}}'
 ```
+
 Expected: two containers (postgres, redis) running. On Docker machines, `npm run db:up` is enough.
 
 - [ ] **Step 9: Lint, format and commit**
@@ -545,6 +586,7 @@ git commit -m "chore: scaffold NestJS project, tooling, env config and local inf
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
 Check that `git status` shows the PDF committed and `.env` not tracked.
 
 ---
@@ -552,10 +594,12 @@ Check that `git status` shows the PDF committed and `.env` not tracked.
 ### Task 2: Prisma schema, migration, transaction runner
 
 **Files:**
+
 - Create: `prisma/schema.prisma`, `prisma/migrations/<timestamp>_init/migration.sql` (generated, then edited), `src/shared/application/transaction-runner.ts`, `src/shared/prisma/prisma.service.ts`, `src/shared/prisma/prisma-transaction-runner.ts`, `src/shared/prisma/prisma.module.ts`, `test/support/test-env.ts`, `test/support/global-setup.ts`
 - Test: `test/integration/shared/transaction-runner.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: `AppConfig`, `APP_CONFIG` (Task 1).
 - Produces:
   - `interface TransactionRunner { run<T>(fn: () => Promise<T>): Promise<T> }`, `TRANSACTION_RUNNER: symbol`
@@ -568,6 +612,7 @@ Check that `git status` shows the PDF committed and `.env` not tracked.
 - [ ] **Step 1: Write the Prisma schema**
 
 `prisma/schema.prisma`:
+
 ```prisma
 generator client {
   provider = "prisma-client-js"
@@ -700,7 +745,9 @@ model ChatMessage {
 cp .env.example .env   # then set SUPABASE_URL=https://placeholder.supabase.co and HEALTH_CHECK_TOKEN=$(openssl rand -hex 24) for now
 npx prisma migrate dev --name init --create-only
 ```
+
 Append to the end of the generated `prisma/migrations/*_init/migration.sql`:
+
 ```sql
 -- Defence-in-depth invariants (see spec §6)
 ALTER TABLE "monthly_usage"
@@ -709,12 +756,14 @@ ALTER TABLE "subscriptions"
   ADD CONSTRAINT "subscriptions_used_messages_check"
   CHECK ("used_messages" >= 0 AND ("max_messages" IS NULL OR "used_messages" <= "max_messages"));
 ```
+
 Then run `npx prisma migrate dev` and `npx prisma generate`.
 Expected: "Your database is now in sync with your schema."
 
 - [ ] **Step 3: Write the test support files**
 
 `test/support/test-env.ts`:
+
 ```ts
 export const TEST_ENV = {
   NODE_ENV: 'test',
@@ -735,6 +784,7 @@ Object.assign(process.env, TEST_ENV);
 ```
 
 `test/support/global-setup.ts`:
+
 ```ts
 import { execSync } from 'node:child_process';
 import { TEST_ENV } from './test-env';
@@ -756,6 +806,7 @@ export default async function globalSetup(): Promise<void> {
 - [ ] **Step 4: Write the failing transaction-runner test**
 
 `test/integration/shared/transaction-runner.int-spec.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../../src/config/env';
@@ -810,6 +861,7 @@ Expected: FAIL, "Cannot find module '../../../src/shared/prisma/prisma.service'"
 - [ ] **Step 6: Implement the Prisma layer**
 
 `src/shared/application/transaction-runner.ts`:
+
 ```ts
 export interface TransactionRunner {
   run<T>(fn: () => Promise<T>): Promise<T>;
@@ -818,6 +870,7 @@ export const TRANSACTION_RUNNER = Symbol('TRANSACTION_RUNNER');
 ```
 
 `src/shared/prisma/prisma.service.ts`:
+
 ```ts
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
@@ -840,6 +893,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 ```
 
 `src/shared/prisma/prisma-transaction-runner.ts`:
+
 ```ts
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable } from '@nestjs/common';
@@ -872,6 +926,7 @@ export class PrismaTransactionRunner implements TransactionRunner {
 ```
 
 `src/shared/prisma/prisma.module.ts`:
+
 ```ts
 import { Global, Module } from '@nestjs/common';
 import { TRANSACTION_RUNNER } from '../application/transaction-runner';
@@ -880,7 +935,11 @@ import { PrismaTransactionRunner } from './prisma-transaction-runner';
 
 @Global()
 @Module({
-  providers: [PrismaService, PrismaTransactionRunner, { provide: TRANSACTION_RUNNER, useExisting: PrismaTransactionRunner }],
+  providers: [
+    PrismaService,
+    PrismaTransactionRunner,
+    { provide: TRANSACTION_RUNNER, useExisting: PrismaTransactionRunner },
+  ],
   exports: [PrismaService, PrismaTransactionRunner, TRANSACTION_RUNNER],
 })
 export class PrismaModule {}
@@ -905,10 +964,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 3: HTTP platform: errors, security middleware, validation, timeout, logging
 
 **Files:**
+
 - Create: `src/shared/domain/errors.ts`, `src/shared/domain/actor.ts`, `src/shared/domain/admin-policy.ts`, `src/shared/http/error-status.ts`, `src/shared/http/send-error.ts`, `src/shared/http/request.types.ts`, `src/shared/http/request-id.middleware.ts`, `src/shared/http/content-type.middleware.ts`, `src/shared/http/body-error.middleware.ts`, `src/shared/http/exception.filter.ts`, `src/shared/http/timeout.interceptor.ts`, `src/shared/http/zod-validation.pipe.ts`, `src/shared/http/sanitize.ts`, `src/shared/http/http-platform.module.ts`, `src/shared/logging/request-logger.middleware.ts`, `src/bootstrap.ts`, `src/app.module.ts`, `src/main.ts`
 - Test: `test/integration/shared/http-platform.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: `AppConfig`, `APP_CONFIG`, `CoreModule`, `PrismaModule`.
 - Produces:
   - `type ErrorCode` (the union below), `class DomainError(code, message, details?)`
@@ -923,6 +984,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the shared domain primitives**
 
 `src/shared/domain/errors.ts`:
+
 ```ts
 export type ErrorCode =
   | 'VALIDATION_FAILED'
@@ -961,6 +1023,7 @@ export class DomainError extends Error {
 ```
 
 `src/shared/domain/actor.ts`:
+
 ```ts
 export type Role = 'USER' | 'ADMIN';
 
@@ -974,6 +1037,7 @@ export const isAdmin = (actor: Actor): boolean => actor.role === 'ADMIN';
 ```
 
 `src/shared/domain/admin-policy.ts`:
+
 ```ts
 import { isAdmin, type Actor } from './actor';
 import { DomainError } from './errors';
@@ -986,6 +1050,7 @@ export function assertAdmin(actor: Actor): void {
 - [ ] **Step 2: Write the HTTP error plumbing**
 
 `src/shared/http/error-status.ts`:
+
 ```ts
 import type { ErrorCode } from '../domain/errors';
 
@@ -1016,6 +1081,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
 ```
 
 `src/shared/http/request.types.ts`:
+
 ```ts
 import type { Actor } from '../domain/actor';
 
@@ -1036,6 +1102,7 @@ export {};
 ```
 
 `src/shared/http/send-error.ts`:
+
 ```ts
 import type { Response } from 'express';
 import type { ErrorCode } from '../domain/errors';
@@ -1060,6 +1127,7 @@ export function sendError(
 ```
 
 `src/shared/http/request-id.middleware.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
@@ -1075,6 +1143,7 @@ export function requestIdMiddleware(req: Request, res: Response, next: NextFunct
 ```
 
 `src/shared/http/content-type.middleware.ts`:
+
 ```ts
 import type { NextFunction, Request, Response } from 'express';
 import { sendError } from './send-error';
@@ -1082,10 +1151,16 @@ import { sendError } from './send-error';
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 
 export function contentTypeMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const hasBody = Number(req.headers['content-length'] ?? '0') > 0 || req.headers['transfer-encoding'] !== undefined;
+  const hasBody =
+    Number(req.headers['content-length'] ?? '0') > 0 || req.headers['transfer-encoding'] !== undefined;
   if (!hasBody) return next();
   if (!BODY_METHODS.has(req.method)) {
-    return sendError(res, 'VALIDATION_FAILED', `A request body is not allowed for ${req.method}`, req.requestId);
+    return sendError(
+      res,
+      'VALIDATION_FAILED',
+      `A request body is not allowed for ${req.method}`,
+      req.requestId,
+    );
   }
   if (req.is('application/json') !== 'application/json') {
     return sendError(res, 'UNSUPPORTED_MEDIA_TYPE', 'Content-Type must be application/json', req.requestId);
@@ -1095,6 +1170,7 @@ export function contentTypeMiddleware(req: Request, res: Response, next: NextFun
 ```
 
 `src/shared/http/body-error.middleware.ts`:
+
 ```ts
 import type { NextFunction, Request, Response } from 'express';
 import { sendError } from './send-error';
@@ -1102,8 +1178,10 @@ import { sendError } from './send-error';
 /** Express error middleware placed right after the JSON parser. */
 export function bodyErrorMiddleware(err: unknown, req: Request, res: Response, next: NextFunction): void {
   const type = (err as { type?: unknown } | null)?.type;
-  if (type === 'entity.too.large') return sendError(res, 'PAYLOAD_TOO_LARGE', 'Request body exceeds the size limit', req.requestId);
-  if (type === 'entity.parse.failed') return sendError(res, 'VALIDATION_FAILED', 'Malformed JSON body', req.requestId);
+  if (type === 'entity.too.large')
+    return sendError(res, 'PAYLOAD_TOO_LARGE', 'Request body exceeds the size limit', req.requestId);
+  if (type === 'entity.parse.failed')
+    return sendError(res, 'VALIDATION_FAILED', 'Malformed JSON body', req.requestId);
   if (type === 'charset.unsupported' || type === 'encoding.unsupported') {
     return sendError(res, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported body encoding', req.requestId);
   }
@@ -1112,6 +1190,7 @@ export function bodyErrorMiddleware(err: unknown, req: Request, res: Response, n
 ```
 
 `src/shared/http/exception.filter.ts`:
+
 ```ts
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -1134,19 +1213,27 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (res.headersSent) return;
     const mapped = this.map(exception);
     if (mapped.code === 'INTERNAL_ERROR') {
-      this.logger.error({ requestId: req.requestId, err: exception instanceof Error ? exception.stack : String(exception) });
+      this.logger.error({
+        requestId: req.requestId,
+        err: exception instanceof Error ? exception.stack : String(exception),
+      });
     }
     sendError(res, mapped.code, mapped.message, req.requestId, mapped.details);
   }
 
   private map(exception: unknown): Mapped {
     if (exception instanceof DomainError) {
-      return { code: exception.code, message: exception.message, ...(exception.details ? { details: exception.details } : {}) };
+      return {
+        code: exception.code,
+        message: exception.message,
+        ...(exception.details ? { details: exception.details } : {}),
+      };
     }
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       if (status === 404) return { code: 'NOT_FOUND', message: 'Resource not found' };
-      if (status === 413) return { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds the size limit' };
+      if (status === 413)
+        return { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds the size limit' };
       if (status === 400) return { code: 'VALIDATION_FAILED', message: 'Bad request' };
     }
     return { code: 'INTERNAL_ERROR', message: 'Internal server error' };
@@ -1157,6 +1244,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 - [ ] **Step 3: Write validation, sanitisation and the timeout interceptor**
 
 `src/shared/http/sanitize.ts`:
+
 ```ts
 import sanitizeHtml from 'sanitize-html';
 import { z } from 'zod';
@@ -1181,6 +1269,7 @@ export const safeText = (maxLength: number) =>
 ```
 
 `src/shared/http/zod-validation.pipe.ts`:
+
 ```ts
 import { PipeTransform } from '@nestjs/common';
 import type { z } from 'zod';
@@ -1202,6 +1291,7 @@ export class ZodValidationPipe<T extends z.ZodType> implements PipeTransform<unk
 ```
 
 `src/shared/http/timeout.interceptor.ts`:
+
 ```ts
 import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from '@nestjs/common';
 import type { Request } from 'express';
@@ -1230,6 +1320,7 @@ export class TimeoutInterceptor implements NestInterceptor {
 ```
 
 `src/shared/http/http-platform.module.ts`:
+
 ```ts
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
@@ -1248,6 +1339,7 @@ export class HttpPlatformModule {}
 - [ ] **Step 4: Write the request logger, bootstrap, app module and main**
 
 `src/shared/logging/request-logger.middleware.ts`:
+
 ```ts
 import type { NextFunction, Request, Response } from 'express';
 import type { Logger } from 'pino';
@@ -1274,6 +1366,7 @@ export function requestLogger(logger: Logger) {
 ```
 
 `src/bootstrap.ts`:
+
 ```ts
 import './shared/http/request.types';
 import express from 'express';
@@ -1298,7 +1391,10 @@ export function configureApp(
     {
       level: config.LOG_LEVEL,
       base: undefined,
-      redact: { paths: ['req.headers.authorization', 'req.headers["x-signature"]', 'req.headers["x-health-token"]'], censor: '[REDACTED]' },
+      redact: {
+        paths: ['req.headers.authorization', 'req.headers["x-signature"]', 'req.headers["x-health-token"]'],
+        censor: '[REDACTED]',
+      },
     },
     opts.logStream,
   );
@@ -1343,6 +1439,7 @@ export function configureApp(
 ```
 
 `src/app.module.ts`:
+
 ```ts
 import { Module } from '@nestjs/common';
 import { CoreModule } from './shared/core.module';
@@ -1356,6 +1453,7 @@ export class AppModule {}
 ```
 
 `src/main.ts`:
+
 ```ts
 import { existsSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
@@ -1382,6 +1480,7 @@ void main();
 - [ ] **Step 5: Write the failing HTTP platform integration test**
 
 `test/integration/shared/http-platform.int-spec.ts`:
+
 ```ts
 import { Body, Controller, Get, Module, Post } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -1470,7 +1569,9 @@ describe('HTTP platform', () => {
   });
 
   it('rejects bodies over 16kb with 413', async () => {
-    const res = await request(http).post('/test/echo').send({ name: 'x'.repeat(17 * 1024) });
+    const res = await request(http)
+      .post('/test/echo')
+      .send({ name: 'x'.repeat(17 * 1024) });
     expect(res.status).toBe(413);
     expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
   });
@@ -1484,7 +1585,10 @@ describe('HTTP platform', () => {
   it('rejects a body on GET and malformed JSON with 400', async () => {
     const withBody = await request(http).get('/test/boom').set('Content-Type', 'application/json').send('{}');
     expect(withBody.status).toBe(400);
-    const malformed = await request(http).post('/test/echo').set('Content-Type', 'application/json').send('{"name":');
+    const malformed = await request(http)
+      .post('/test/echo')
+      .set('Content-Type', 'application/json')
+      .send('{"name":');
     expect(malformed.status).toBe(400);
     expect(malformed.body.error.code).toBe('VALIDATION_FAILED');
   });
@@ -1497,7 +1601,9 @@ describe('HTTP platform', () => {
   });
 
   it('strips markup and rejects control characters', async () => {
-    const stripped = await request(http).post('/test/echo').send({ name: '<b>Bob</b><script>alert(1)</script>' });
+    const stripped = await request(http)
+      .post('/test/echo')
+      .send({ name: '<b>Bob</b><script>alert(1)</script>' });
     expect(stripped.body).toEqual({ name: 'Bob' });
     const control = await request(http).post('/test/echo').send({ name: 'Bo\u0007b' });
     expect(control.status).toBe(400);
@@ -1526,6 +1632,7 @@ describe('HTTP platform', () => {
 
 Run: `npx jest -c jest.int.config.js test/integration/shared/http-platform`
 Expected before Steps 1–4 exist: FAIL (module not found). After Steps 1–4: PASS (10 tests).
+
 - If the 500 test logs an error to the console, that's expected from `Logger`.
 - If the CORS test fails because Nest's `enableCors` runs after other middleware, move the `enableCors` call to be the first statement after `requestIdMiddleware`.
 
@@ -1548,11 +1655,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 4: Redis and the rate limiter
 
 **Files:**
+
 - Create: `src/shared/redis/redis.service.ts`, `src/shared/redis/redis.module.ts`, `src/shared/redis/rate-limit.config.ts`, `src/shared/redis/rate-limiter.ts`, `src/shared/http/decorators.ts`, `src/shared/http/rate-limit.guards.ts`
 - Modify: `src/app.module.ts` (import `RedisModule`)
 - Test: `test/integration/shared/rate-limiter.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: `APP_CONFIG`, `DomainError`.
 - Produces:
   - `RedisService { client: Redis; run<T>(fn: (c: Redis) => Promise<T>): Promise<T> }` (maps Redis failures to `SERVICE_UNAVAILABLE`)
@@ -1564,6 +1673,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the failing limiter test**
 
 `test/integration/shared/rate-limiter.int-spec.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../../src/config/env';
@@ -1612,6 +1722,7 @@ Expected: FAIL (module not found).
 - [ ] **Step 3: Implement Redis, the limiter, decorators and guards**
 
 `src/shared/redis/redis.service.ts`:
+
 ```ts
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
@@ -1623,7 +1734,11 @@ export class RedisService implements OnModuleDestroy {
   readonly client: Redis;
 
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
-    this.client = new Redis(config.REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 2000, commandTimeout: 1000 });
+    this.client = new Redis(config.REDIS_URL, {
+      maxRetriesPerRequest: 1,
+      connectTimeout: 2000,
+      commandTimeout: 1000,
+    });
     this.client.on('error', () => undefined); // errors surface per command via run()
   }
 
@@ -1642,6 +1757,7 @@ export class RedisService implements OnModuleDestroy {
 ```
 
 `src/shared/redis/redis.module.ts`:
+
 ```ts
 import { Global, Module } from '@nestjs/common';
 import { RateLimiter } from './rate-limiter';
@@ -1653,6 +1769,7 @@ export class RedisModule {}
 ```
 
 `src/shared/redis/rate-limit.config.ts`:
+
 ```ts
 export type RateGroup = 'auth' | 'chat' | 'subscriptions' | 'admin' | 'ops';
 
@@ -1668,6 +1785,7 @@ export const RATE_LIMITS: Readonly<Record<RateGroup, { perIp: number; perUser: n
 ```
 
 `src/shared/redis/rate-limiter.ts`:
+
 ```ts
 import { Injectable } from '@nestjs/common';
 import { WINDOW_SECONDS } from './rate-limit.config';
@@ -1684,13 +1802,17 @@ export class RateLimiter {
   constructor(private readonly redis: RedisService) {}
 
   async hit(key: string, limit: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
-    const [count, ttl] = (await this.redis.run((c) => c.eval(FIXED_WINDOW_LUA, 1, key, WINDOW_SECONDS))) as [number, number];
+    const [count, ttl] = (await this.redis.run((c) => c.eval(FIXED_WINDOW_LUA, 1, key, WINDOW_SECONDS))) as [
+      number,
+      number,
+    ];
     return { allowed: count <= limit, retryAfterSeconds: ttl > 0 ? ttl : WINDOW_SECONDS };
   }
 }
 ```
 
 `src/shared/http/decorators.ts` (auth-mode and role decorators are added in Task 7):
+
 ```ts
 import { SetMetadata } from '@nestjs/common';
 import type { RateGroup } from '../redis/rate-limit.config';
@@ -1700,6 +1822,7 @@ export const RateLimitGroup = (group: RateGroup) => SetMetadata(RATE_LIMIT_GROUP
 ```
 
 `src/shared/http/rate-limit.guards.ts`:
+
 ```ts
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -1711,7 +1834,12 @@ import { RATE_LIMIT_GROUP_KEY } from './decorators';
 
 function groupOf(reflector: Reflector, ctx: ExecutionContext): RateGroup {
   // Routes that forget to declare a group get the strictest limits.
-  return reflector.getAllAndOverride<RateGroup | undefined>(RATE_LIMIT_GROUP_KEY, [ctx.getHandler(), ctx.getClass()]) ?? 'auth';
+  return (
+    reflector.getAllAndOverride<RateGroup | undefined>(RATE_LIMIT_GROUP_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]) ?? 'auth'
+  );
 }
 
 async function enforce(limiter: RateLimiter, res: Response, key: string, limit: number): Promise<void> {
@@ -1732,7 +1860,12 @@ export class IpRateLimitGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const group = groupOf(this.reflector, ctx);
     const req = ctx.switchToHttp().getRequest<Request>();
-    await enforce(this.limiter, ctx.switchToHttp().getResponse<Response>(), `rl:ip:${group}:${req.ip ?? 'unknown'}`, RATE_LIMITS[group].perIp);
+    await enforce(
+      this.limiter,
+      ctx.switchToHttp().getResponse<Response>(),
+      `rl:ip:${group}:${req.ip ?? 'unknown'}`,
+      RATE_LIMITS[group].perIp,
+    );
     return true;
   }
 }
@@ -1749,7 +1882,12 @@ export class UserRateLimitGuard implements CanActivate {
     const userId = req.actor?.userId ?? (req.verifiedToken as { userId?: string } | undefined)?.userId;
     if (!userId) return true;
     const group = groupOf(this.reflector, ctx);
-    await enforce(this.limiter, ctx.switchToHttp().getResponse<Response>(), `rl:user:${group}:${userId}`, RATE_LIMITS[group].perUser);
+    await enforce(
+      this.limiter,
+      ctx.switchToHttp().getResponse<Response>(),
+      `rl:user:${group}:${userId}`,
+      RATE_LIMITS[group].perUser,
+    );
     return true;
   }
 }
@@ -1776,11 +1914,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 5: Auth domain: signature canonicalisation, freshness and key-binding policy
 
 **Files:**
+
 - Create: `src/auth/domain/ports.ts`, `src/auth/domain/entities/device-binding.ts`, `src/auth/domain/services/signature.ts`, `src/auth/domain/policies/key-binding.policy.ts`
 - Modify: `src/shared/http/request.types.ts` (type `verifiedToken?: VerifiedToken`)
 - Test: `test/unit/auth/signature.spec.ts`, `test/unit/auth/key-binding.policy.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `DomainError`, `Role`.
 - Produces:
   - `interface PublicJwk { kty: 'EC'; crv: 'P-256'; x: string; y: string }`
@@ -1796,8 +1936,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the failing unit tests**
 
 `test/unit/auth/signature.spec.ts`:
+
 ```ts
-import { canonicalString, SignatureVerifier, type SignedRequestParts } from '../../../src/auth/domain/services/signature';
+import {
+  canonicalString,
+  SignatureVerifier,
+  type SignedRequestParts,
+} from '../../../src/auth/domain/services/signature';
 import type { KeyCrypto, PublicJwk } from '../../../src/auth/domain/ports';
 
 const key: PublicJwk = { kty: 'EC', crv: 'P-256', x: 'x', y: 'y' };
@@ -1833,15 +1978,21 @@ describe('SignatureVerifier', () => {
   });
 
   it('rejects stale timestamps', () => {
-    expect(() => verifier.assertFresh('1789999939', now)).toThrow(expect.objectContaining({ code: 'REQUEST_EXPIRED' }));
+    expect(() => verifier.assertFresh('1789999939', now)).toThrow(
+      expect.objectContaining({ code: 'REQUEST_EXPIRED' }),
+    );
   });
 
   it('rejects timestamps from a client clock running ahead (Review Focus #2)', () => {
-    expect(() => verifier.assertFresh('1790000120', now)).toThrow(expect.objectContaining({ code: 'REQUEST_EXPIRED' }));
+    expect(() => verifier.assertFresh('1790000120', now)).toThrow(
+      expect.objectContaining({ code: 'REQUEST_EXPIRED' }),
+    );
   });
 
   it('rejects non-integer timestamps as a missing signature', () => {
-    expect(() => verifier.assertFresh('17900.5', now)).toThrow(expect.objectContaining({ code: 'SIGNATURE_REQUIRED' }));
+    expect(() => verifier.assertFresh('17900.5', now)).toThrow(
+      expect.objectContaining({ code: 'SIGNATURE_REQUIRED' }),
+    );
   });
 
   it('accepts a valid signature and rejects any tampered part', () => {
@@ -1849,13 +2000,16 @@ describe('SignatureVerifier', () => {
     expect(() => verifier.assertValid(parts, good, key)).not.toThrow();
     for (const field of Object.keys(parts) as (keyof SignedRequestParts)[]) {
       const tampered = { ...parts, [field]: `${parts[field]}!` };
-      expect(() => verifier.assertValid(tampered, good, key)).toThrow(expect.objectContaining({ code: 'INVALID_SIGNATURE' }));
+      expect(() => verifier.assertValid(tampered, good, key)).toThrow(
+        expect.objectContaining({ code: 'INVALID_SIGNATURE' }),
+      );
     }
   });
 });
 ```
 
 `test/unit/auth/key-binding.policy.spec.ts`:
+
 ```ts
 import { KeyBindingPolicy } from '../../../src/auth/domain/policies/key-binding.policy';
 
@@ -1864,7 +2018,9 @@ describe('KeyBindingPolicy', () => {
   const now = new Date('2026-09-24T12:00:00Z');
 
   it('allows binding within 300s of authentication', () => {
-    expect(() => policy.assertCanBind({ authenticatedAt: new Date('2026-09-24T11:55:01Z'), alreadyBound: false }, now)).not.toThrow();
+    expect(() =>
+      policy.assertCanBind({ authenticatedAt: new Date('2026-09-24T11:55:01Z'), alreadyBound: false }, now),
+    ).not.toThrow();
   });
 
   it('rejects a second binding for the same session', () => {
@@ -1874,9 +2030,9 @@ describe('KeyBindingPolicy', () => {
   });
 
   it('rejects binding after the window or without an authentication time', () => {
-    expect(() => policy.assertCanBind({ authenticatedAt: new Date('2026-09-24T11:54:59Z'), alreadyBound: false }, now)).toThrow(
-      expect.objectContaining({ code: 'KEY_BINDING_WINDOW_CLOSED' }),
-    );
+    expect(() =>
+      policy.assertCanBind({ authenticatedAt: new Date('2026-09-24T11:54:59Z'), alreadyBound: false }, now),
+    ).toThrow(expect.objectContaining({ code: 'KEY_BINDING_WINDOW_CLOSED' }));
     expect(() => policy.assertCanBind({ authenticatedAt: null, alreadyBound: false }, now)).toThrow(
       expect.objectContaining({ code: 'KEY_BINDING_WINDOW_CLOSED' }),
     );
@@ -1892,6 +2048,7 @@ Expected: FAIL (modules not found).
 - [ ] **Step 3: Implement the auth domain**
 
 `src/auth/domain/ports.ts`:
+
 ```ts
 export interface PublicJwk {
   kty: 'EC';
@@ -1927,6 +2084,7 @@ export const NONCE_STORE = Symbol('NONCE_STORE');
 ```
 
 `src/auth/domain/entities/device-binding.ts`:
+
 ```ts
 import type { Role } from '../../../shared/domain/actor';
 import type { PublicJwk } from '../ports';
@@ -1947,6 +2105,7 @@ export interface BoundSession {
 ```
 
 `src/auth/domain/services/signature.ts`:
+
 ```ts
 import { DomainError } from '../../../shared/domain/errors';
 import type { KeyCrypto, PublicJwk } from '../ports';
@@ -1963,7 +2122,15 @@ export interface SignedRequestParts {
 }
 
 export function canonicalString(p: SignedRequestParts): string {
-  return [SIGNATURE_VERSION, p.method.toUpperCase(), p.url, p.timestamp, p.nonce, p.bodySha256, p.tokenSha256].join('\n');
+  return [
+    SIGNATURE_VERSION,
+    p.method.toUpperCase(),
+    p.url,
+    p.timestamp,
+    p.nonce,
+    p.bodySha256,
+    p.tokenSha256,
+  ].join('\n');
 }
 
 export class SignatureVerifier {
@@ -1974,7 +2141,8 @@ export class SignatureVerifier {
 
   assertFresh(timestamp: string, now: Date): void {
     const ts = Number(timestamp);
-    if (!Number.isSafeInteger(ts)) throw new DomainError('SIGNATURE_REQUIRED', 'Signature timestamp is malformed');
+    if (!Number.isSafeInteger(ts))
+      throw new DomainError('SIGNATURE_REQUIRED', 'Signature timestamp is malformed');
     if (Math.abs(now.getTime() / 1000 - ts) > this.maxSkewSeconds) {
       throw new DomainError('REQUEST_EXPIRED', 'Request timestamp is outside the allowed window');
     }
@@ -1989,6 +2157,7 @@ export class SignatureVerifier {
 ```
 
 `src/auth/domain/policies/key-binding.policy.ts`:
+
 ```ts
 import { DomainError } from '../../../shared/domain/errors';
 
@@ -1996,7 +2165,8 @@ export class KeyBindingPolicy {
   constructor(private readonly windowSeconds = 300) {}
 
   assertCanBind(input: { authenticatedAt: Date | null; alreadyBound: boolean }, now: Date): void {
-    if (input.alreadyBound) throw new DomainError('KEY_ALREADY_BOUND', 'A key is already bound to this session');
+    if (input.alreadyBound)
+      throw new DomainError('KEY_ALREADY_BOUND', 'A key is already bound to this session');
     const auth = input.authenticatedAt;
     if (!auth || now.getTime() - auth.getTime() > this.windowSeconds * 1000) {
       throw new DomainError('KEY_BINDING_WINDOW_CLOSED', 'Key binding window has closed; sign in again');
@@ -2026,10 +2196,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 6: Token verification, ECDSA crypto, nonce store, mock IdP
 
 **Files:**
+
 - Create: `src/auth/infrastructure/supabase-token-verifier.ts`, `src/auth/infrastructure/ecdsa-key-crypto.ts`, `src/auth/infrastructure/redis-nonce-store.ts`, `scripts/lib/signer.ts`, `test/support/mock-idp.ts`
 - Test: `test/unit/auth/ecdsa-key-crypto.spec.ts`, `test/integration/auth/token-verifier.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: `TokenVerifier`, `VerifiedToken`, `KeyCrypto`, `PublicJwk`, `NonceStore`, `canonicalString`, `RedisService`, `AppConfig`.
 - Produces:
   - `SupabaseTokenVerifier implements TokenVerifier`
@@ -2045,11 +2217,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the signer (shared by tests and the CLI)**
 
 `scripts/lib/signer.ts`:
+
 ```ts
 import { createHash, randomBytes, sign, type KeyObject } from 'node:crypto';
 import { canonicalString } from '../../src/auth/domain/services/signature';
 
-export const sha256b64url = (data: string | Buffer): string => createHash('sha256').update(data).digest('base64url');
+export const sha256b64url = (data: string | Buffer): string =>
+  createHash('sha256').update(data).digest('base64url');
 
 export function signRequest(input: {
   method: string;
@@ -2070,7 +2244,10 @@ export function signRequest(input: {
     bodySha256: sha256b64url(input.rawBody),
     tokenSha256: sha256b64url(input.token),
   });
-  const signature = sign('sha256', Buffer.from(data), { key: input.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+  const signature = sign('sha256', Buffer.from(data), {
+    key: input.privateKey,
+    dsaEncoding: 'ieee-p1363',
+  }).toString('base64url');
   return {
     Authorization: `Bearer ${input.token}`,
     'X-Signature-Timestamp': timestamp,
@@ -2083,6 +2260,7 @@ export function signRequest(input: {
 - [ ] **Step 2: Write the failing ECDSA unit test**
 
 `test/unit/auth/ecdsa-key-crypto.spec.ts`:
+
 ```ts
 import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { EcdsaKeyCrypto } from '../../../src/auth/infrastructure/ecdsa-key-crypto';
@@ -2100,7 +2278,10 @@ describe('EcdsaKeyCrypto', () => {
   it('verifies an IEEE-P1363 P-256 signature and rejects a different key or data', () => {
     const a = keyPair();
     const b = keyPair();
-    const sig = sign('sha256', Buffer.from('hello'), { key: a.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+    const sig = sign('sha256', Buffer.from('hello'), {
+      key: a.privateKey,
+      dsaEncoding: 'ieee-p1363',
+    }).toString('base64url');
     expect(crypto.verify(a.jwk, 'hello', sig)).toBe(true);
     expect(crypto.verify(a.jwk, 'hellO', sig)).toBe(false);
     expect(crypto.verify(b.jwk, 'hello', sig)).toBe(false);
@@ -2109,7 +2290,12 @@ describe('EcdsaKeyCrypto', () => {
 
   it('accepts real P-256 public keys and rejects off-curve points (Review Focus #5)', () => {
     expect(crypto.isValidPublicKey(keyPair().jwk)).toBe(true);
-    const offCurve: PublicJwk = { kty: 'EC', crv: 'P-256', x: randomBytes(32).toString('base64url'), y: randomBytes(32).toString('base64url') };
+    const offCurve: PublicJwk = {
+      kty: 'EC',
+      crv: 'P-256',
+      x: randomBytes(32).toString('base64url'),
+      y: randomBytes(32).toString('base64url'),
+    };
     expect(crypto.isValidPublicKey(offCurve)).toBe(false);
   });
 });
@@ -2123,6 +2309,7 @@ Expected: FAIL (module not found).
 - [ ] **Step 4: Implement ECDSA crypto and the nonce store**
 
 `src/auth/infrastructure/ecdsa-key-crypto.ts`:
+
 ```ts
 import { createPublicKey, verify, type JsonWebKey } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
@@ -2133,7 +2320,12 @@ export class EcdsaKeyCrypto implements KeyCrypto {
   verify(key: PublicJwk, data: string, signatureB64Url: string): boolean {
     try {
       const publicKey = createPublicKey({ key: key as JsonWebKey, format: 'jwk' });
-      return verify('sha256', Buffer.from(data), { key: publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(signatureB64Url, 'base64url'));
+      return verify(
+        'sha256',
+        Buffer.from(data),
+        { key: publicKey, dsaEncoding: 'ieee-p1363' },
+        Buffer.from(signatureB64Url, 'base64url'),
+      );
     } catch {
       return false;
     }
@@ -2151,6 +2343,7 @@ export class EcdsaKeyCrypto implements KeyCrypto {
 ```
 
 `src/auth/infrastructure/redis-nonce-store.ts`:
+
 ```ts
 import { Injectable } from '@nestjs/common';
 import { RedisService } from '../../shared/redis/redis.service';
@@ -2163,7 +2356,9 @@ export class RedisNonceStore implements NonceStore {
   constructor(private readonly redis: RedisService) {}
 
   async claim(sessionId: string, nonce: string): Promise<boolean> {
-    const result = await this.redis.run((c) => c.set(`nonce:${sessionId}:${nonce}`, '1', 'EX', NONCE_TTL_SECONDS, 'NX'));
+    const result = await this.redis.run((c) =>
+      c.set(`nonce:${sessionId}:${nonce}`, '1', 'EX', NONCE_TTL_SECONDS, 'NX'),
+    );
     return result === 'OK';
   }
 }
@@ -2174,6 +2369,7 @@ Run: `npx jest -c jest.unit.config.js test/unit/auth/ecdsa`. Expected: PASS (2 t
 - [ ] **Step 5: Write the mock IdP**
 
 `test/support/mock-idp.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
@@ -2256,6 +2452,7 @@ export class MockIdp {
 - [ ] **Step 6: Write the failing token-verifier integration test**
 
 `test/integration/auth/token-verifier.int-spec.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import { SupabaseTokenVerifier } from '../../../src/auth/infrastructure/supabase-token-verifier';
@@ -2278,7 +2475,9 @@ describe('SupabaseTokenVerifier (against a real JWKS endpoint)', () => {
     const userId = randomUUID();
     const sessionId = randomUUID();
     const authAt = new Date(Math.floor(Date.now() / 1000) * 1000);
-    const v = await verifier.verify(await idp.token({ userId, sessionId, email: 'a@b.co', authenticatedAt: authAt }));
+    const v = await verifier.verify(
+      await idp.token({ userId, sessionId, email: 'a@b.co', authenticatedAt: authAt }),
+    );
     expect(v).toEqual({ userId, sessionId, email: 'a@b.co', authenticatedAt: authAt });
   });
 
@@ -2293,7 +2492,9 @@ describe('SupabaseTokenVerifier (against a real JWKS endpoint)', () => {
   });
 
   it('rejects expired tokens with TOKEN_EXPIRED', async () => {
-    await expect(verifier.verify(await idp.token({ expiresInSeconds: -60 }))).rejects.toMatchObject({ code: 'TOKEN_EXPIRED' });
+    await expect(verifier.verify(await idp.token({ expiresInSeconds: -60 }))).rejects.toMatchObject({
+      code: 'TOKEN_EXPIRED',
+    });
   });
 
   it('rejects alg:none and garbage with INVALID_TOKEN', async () => {
@@ -2312,6 +2513,7 @@ Expected: FAIL (module not found).
 - [ ] **Step 8: Implement the Supabase token verifier**
 
 `src/auth/infrastructure/supabase-token-verifier.ts`:
+
 ```ts
 import { Inject, Injectable } from '@nestjs/common';
 import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload } from 'jose';
@@ -2350,13 +2552,16 @@ export class SupabaseTokenVerifier implements TokenVerifier {
         requiredClaims: ['sub', 'exp', 'iat'],
       }));
     } catch (err) {
-      if (err instanceof errors.JWTExpired) throw new DomainError('TOKEN_EXPIRED', 'Access token has expired');
-      if (err instanceof errors.JWKSTimeout) throw new DomainError('SERVICE_UNAVAILABLE', 'Identity provider unavailable');
+      if (err instanceof errors.JWTExpired)
+        throw new DomainError('TOKEN_EXPIRED', 'Access token has expired');
+      if (err instanceof errors.JWKSTimeout)
+        throw new DomainError('SERVICE_UNAVAILABLE', 'Identity provider unavailable');
       if (err instanceof errors.JOSEError) throw new DomainError('INVALID_TOKEN', 'Access token is invalid');
       throw new DomainError('SERVICE_UNAVAILABLE', 'Identity provider unavailable');
     }
     const claims = claimsSchema.safeParse(payload);
-    if (!claims.success || claims.data.is_anonymous === true) throw new DomainError('INVALID_TOKEN', 'Access token is invalid');
+    if (!claims.success || claims.data.is_anonymous === true)
+      throw new DomainError('INVALID_TOKEN', 'Access token is invalid');
     const times = (claims.data.amr ?? []).map((a) => a.timestamp);
     return {
       userId: claims.data.sub,
@@ -2367,6 +2572,7 @@ export class SupabaseTokenVerifier implements TokenVerifier {
   }
 }
 ```
+
 Note: if jose rejects `not.a.jwt` with a non-JOSE error, it maps to `SERVICE_UNAVAILABLE` and the test fails. In that case, add a `/^[\w-]+\.[\w-]+\.[\w-]*$/` shape check before `jwtVerify` that throws `INVALID_TOKEN`.
 
 - [ ] **Step 9: Run it and confirm it passes**
@@ -2388,11 +2594,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 7: Device-key registration, auth guard, RBAC guard, /auth/me
 
 **Files:**
+
 - Create: `src/auth/repositories/user.repository.ts`, `src/auth/repositories/prisma-user.repository.ts`, `src/auth/repositories/device-binding.repository.ts`, `src/auth/repositories/prisma-device-binding.repository.ts`, `src/auth/application/register-device-key.use-case.ts`, `src/auth/application/get-me.use-case.ts`, `src/auth/guards/auth.guard.ts`, `src/shared/http/roles.guard.ts`, `src/auth/controllers/auth.controller.ts`, `src/auth/auth.module.ts`, `test/support/test-app.ts`, `test/support/test-client.ts`
 - Modify: `src/shared/http/decorators.ts` (add auth-mode, roles and param decorators), `src/app.module.ts` (import `AuthModule`)
 - Test: `test/integration/auth/auth-access.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: everything from Tasks 3–6.
 - Produces:
   - Decorators: `Roles(...roles: Role[])`, `ROLES_KEY`, `BearerOnly()`, `HealthProbe()`, `AUTH_MODE_KEY`, `type AuthMode = 'signed' | 'bearer-only' | 'health-probe'`, `CurrentActor()`, `CurrentToken()`
@@ -2409,6 +2617,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Add the auth-mode, role and parameter decorators**
 
 Append to `src/shared/http/decorators.ts`:
+
 ```ts
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 import type { Request } from 'express';
@@ -2438,11 +2647,13 @@ export const CurrentToken = createParamDecorator((_: unknown, ctx: ExecutionCont
   return req.verifiedToken;
 });
 ```
+
 (Merge the `@nestjs/common` import with the existing `SetMetadata` import.)
 
 - [ ] **Step 2: Write the repositories**
 
 `src/auth/repositories/user.repository.ts`:
+
 ```ts
 import type { Role } from '../../shared/domain/actor';
 
@@ -2460,6 +2671,7 @@ export const USER_REPOSITORY = Symbol('USER_REPOSITORY');
 ```
 
 `src/auth/repositories/prisma-user.repository.ts`:
+
 ```ts
 import { Injectable } from '@nestjs/common';
 import { PrismaTransactionRunner } from '../../shared/prisma/prisma-transaction-runner';
@@ -2480,6 +2692,7 @@ export class PrismaUserRepository implements UserRepository {
 ```
 
 `src/auth/repositories/device-binding.repository.ts`:
+
 ```ts
 import type { BoundSession, DeviceBinding } from '../domain/entities/device-binding';
 
@@ -2493,6 +2706,7 @@ export const DEVICE_BINDING_REPOSITORY = Symbol('DEVICE_BINDING_REPOSITORY');
 ```
 
 `src/auth/repositories/prisma-device-binding.repository.ts`:
+
 ```ts
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -2511,7 +2725,9 @@ export class PrismaDeviceBindingRepository implements DeviceBindingRepository {
       where: { sessionId },
       select: { userId: true, publicKeyJwk: true, user: { select: { role: true } } },
     });
-    return row ? { userId: row.userId, role: row.user.role, publicKeyJwk: row.publicKeyJwk as unknown as PublicJwk } : null;
+    return row
+      ? { userId: row.userId, role: row.user.role, publicKeyJwk: row.publicKeyJwk as unknown as PublicJwk }
+      : null;
   }
 
   async existsForSession(sessionId: string): Promise<boolean> {
@@ -2521,7 +2737,13 @@ export class PrismaDeviceBindingRepository implements DeviceBindingRepository {
   async create(b: DeviceBinding): Promise<void> {
     try {
       await this.tx.db().deviceBinding.create({
-        data: { id: b.id, userId: b.userId, sessionId: b.sessionId, publicKeyJwk: { ...b.publicKeyJwk }, createdAt: b.createdAt },
+        data: {
+          id: b.id,
+          userId: b.userId,
+          sessionId: b.sessionId,
+          publicKeyJwk: { ...b.publicKeyJwk },
+          createdAt: b.createdAt,
+        },
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -2536,6 +2758,7 @@ export class PrismaDeviceBindingRepository implements DeviceBindingRepository {
 - [ ] **Step 3: Write the use cases**
 
 `src/auth/application/register-device-key.use-case.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
@@ -2544,7 +2767,10 @@ import { CLOCK, type Clock } from '../../shared/domain/clock';
 import { DomainError } from '../../shared/domain/errors';
 import { KeyBindingPolicy } from '../domain/policies/key-binding.policy';
 import { KEY_CRYPTO, type KeyCrypto, type PublicJwk, type VerifiedToken } from '../domain/ports';
-import { DEVICE_BINDING_REPOSITORY, type DeviceBindingRepository } from '../repositories/device-binding.repository';
+import {
+  DEVICE_BINDING_REPOSITORY,
+  type DeviceBindingRepository,
+} from '../repositories/device-binding.repository';
 import { USER_REPOSITORY, type UserRepository } from '../repositories/user.repository';
 
 @Injectable()
@@ -2569,7 +2795,13 @@ export class RegisterDeviceKeyUseCase {
     const bindingId = randomUUID();
     await this.tx.run(async () => {
       await this.users.upsert({ id: token.userId, email: token.email });
-      await this.bindings.create({ id: bindingId, userId: token.userId, sessionId: token.sessionId, publicKeyJwk: publicKey, createdAt: now });
+      await this.bindings.create({
+        id: bindingId,
+        userId: token.userId,
+        sessionId: token.sessionId,
+        publicKeyJwk: publicKey,
+        createdAt: now,
+      });
     });
     return { bindingId };
   }
@@ -2577,6 +2809,7 @@ export class RegisterDeviceKeyUseCase {
 ```
 
 `src/auth/application/get-me.use-case.ts`:
+
 ```ts
 import { Inject, Injectable } from '@nestjs/common';
 import type { Actor } from '../../shared/domain/actor';
@@ -2598,6 +2831,7 @@ export class GetMeUseCase {
 - [ ] **Step 4: Write the guards**
 
 `src/auth/guards/auth.guard.ts`:
+
 ```ts
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { CanActivate, ExecutionContext, Inject, Injectable } from '@nestjs/common';
@@ -2608,8 +2842,18 @@ import { CLOCK, type Clock } from '../../shared/domain/clock';
 import { DomainError } from '../../shared/domain/errors';
 import { AUTH_MODE_KEY, type AuthMode } from '../../shared/http/decorators';
 import { SignatureVerifier } from '../domain/services/signature';
-import { KEY_CRYPTO, NONCE_STORE, TOKEN_VERIFIER, type KeyCrypto, type NonceStore, type TokenVerifier } from '../domain/ports';
-import { DEVICE_BINDING_REPOSITORY, type DeviceBindingRepository } from '../repositories/device-binding.repository';
+import {
+  KEY_CRYPTO,
+  NONCE_STORE,
+  TOKEN_VERIFIER,
+  type KeyCrypto,
+  type NonceStore,
+  type TokenVerifier,
+} from '../domain/ports';
+import {
+  DEVICE_BINDING_REPOSITORY,
+  type DeviceBindingRepository,
+} from '../repositories/device-binding.repository';
 
 const sha256 = (data: string | Buffer) => createHash('sha256').update(data).digest();
 const b64url = (data: string | Buffer) => sha256(data).toString('base64url');
@@ -2634,7 +2878,11 @@ export class AuthGuard implements CanActivate {
   }
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const mode = this.reflector.getAllAndOverride<AuthMode | undefined>(AUTH_MODE_KEY, [ctx.getHandler(), ctx.getClass()]) ?? 'signed';
+    const mode =
+      this.reflector.getAllAndOverride<AuthMode | undefined>(AUTH_MODE_KEY, [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ]) ?? 'signed';
     const req = ctx.switchToHttp().getRequest<Request>();
 
     if (mode === 'health-probe') {
@@ -2656,13 +2904,21 @@ export class AuthGuard implements CanActivate {
     const timestamp = req.header('x-signature-timestamp');
     const nonce = req.header('x-signature-nonce');
     const signature = req.header('x-signature');
-    if (!timestamp || !nonce || !signature || !TS_RE.test(timestamp) || !NONCE_RE.test(nonce) || !SIG_RE.test(signature)) {
+    if (
+      !timestamp ||
+      !nonce ||
+      !signature ||
+      !TS_RE.test(timestamp) ||
+      !NONCE_RE.test(nonce) ||
+      !SIG_RE.test(signature)
+    ) {
       throw new DomainError('SIGNATURE_REQUIRED', 'Request signature headers are missing or malformed');
     }
     this.verifier.assertFresh(timestamp, this.clock.now());
 
     const bound = await this.bindings.findBoundSession(verified.sessionId);
-    if (!bound || bound.userId !== verified.userId) throw new DomainError('KEY_NOT_BOUND', 'No key is bound to this session');
+    if (!bound || bound.userId !== verified.userId)
+      throw new DomainError('KEY_NOT_BOUND', 'No key is bound to this session');
 
     this.verifier.assertValid(
       {
@@ -2687,6 +2943,7 @@ export class AuthGuard implements CanActivate {
 ```
 
 `src/shared/http/roles.guard.ts`:
+
 ```ts
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -2702,7 +2959,10 @@ export class RolesGuard implements CanActivate {
 
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, [ctx.getHandler(), ctx.getClass()]);
+    const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
     if (!req.actor) return true; // bearer-only / health-probe routes carry no actor; AuthGuard already vetted them
     if (!roles || !roles.includes(req.actor.role)) throw new DomainError('FORBIDDEN', 'Insufficient role');
     return true;
@@ -2713,6 +2973,7 @@ export class RolesGuard implements CanActivate {
 - [ ] **Step 5: Write the controller and module; wire the global guards**
 
 `src/auth/controllers/auth.controller.ts`:
+
 ```ts
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { z } from 'zod';
@@ -2739,7 +3000,10 @@ export class AuthController {
   @Post('device-keys')
   @HttpCode(201)
   @BearerOnly()
-  register(@CurrentToken() token: VerifiedToken, @Body(new ZodValidationPipe(registerSchema)) body: z.infer<typeof registerSchema>) {
+  register(
+    @CurrentToken() token: VerifiedToken,
+    @Body(new ZodValidationPipe(registerSchema)) body: z.infer<typeof registerSchema>,
+  ) {
     return this.registerKey.execute(token, body.publicKey);
   }
 
@@ -2752,6 +3016,7 @@ export class AuthController {
 ```
 
 `src/auth/auth.module.ts`:
+
 ```ts
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
@@ -2795,6 +3060,7 @@ Add `AuthModule` to the `imports` of `src/app.module.ts`.
 - [ ] **Step 6: Write the test app factory and signed test client**
 
 `test/support/test-app.ts`:
+
 ```ts
 import type { Server } from 'node:http';
 import { Test } from '@nestjs/testing';
@@ -2816,7 +3082,9 @@ export interface TestContext {
   config: AppConfig;
 }
 
-export async function createTestApp(opts: { env?: Record<string, string>; logStream?: pino.DestinationStream } = {}): Promise<TestContext> {
+export async function createTestApp(
+  opts: { env?: Record<string, string>; logStream?: pino.DestinationStream } = {},
+): Promise<TestContext> {
   const idp = await MockIdp.start();
   const config = loadConfig({ ...process.env, SUPABASE_JWKS_URL: idp.jwksUrl, ...opts.env });
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -2826,11 +3094,19 @@ export async function createTestApp(opts: { env?: Record<string, string>; logStr
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
   configureApp(app, config, opts.logStream ? { logStream: opts.logStream } : {});
   await app.init();
-  return { app, http: app.getHttpServer() as Server, prisma: app.get(PrismaService), redis: app.get(RedisService), idp, config };
+  return {
+    app,
+    http: app.getHttpServer() as Server,
+    prisma: app.get(PrismaService),
+    redis: app.get(RedisService),
+    idp,
+    config,
+  };
 }
 
 export async function resetState(ctx: TestContext): Promise<void> {
-  await ctx.prisma.$executeRaw`TRUNCATE chat_messages, monthly_usage, subscriptions, device_bindings, users CASCADE`;
+  await ctx.prisma
+    .$executeRaw`TRUNCATE chat_messages, monthly_usage, subscriptions, device_bindings, users CASCADE`;
   await ctx.redis.client.flushdb();
 }
 
@@ -2841,6 +3117,7 @@ export async function closeTestApp(ctx: TestContext): Promise<void> {
 ```
 
 `test/support/test-client.ts`:
+
 ```ts
 import { generateKeyPairSync, randomUUID, type KeyObject } from 'node:crypto';
 import request, { type Test } from 'supertest';
@@ -2872,13 +3149,23 @@ export class TestClient {
     const email = `${userId.slice(0, 8)}@example.com`;
     const token = await ctx.idp.token({ userId, sessionId, email });
     const { privateKey, publicKeyJwk } = newKeyPair();
-    const res = await request(ctx.http).post('/v1/auth/device-keys').set('Authorization', `Bearer ${token}`).send({ publicKey: publicKeyJwk });
-    if (res.status !== 201) throw new Error(`device-key registration failed: ${res.status} ${JSON.stringify(res.body)}`);
-    if (opts.role === 'ADMIN') await ctx.prisma.user.update({ where: { id: userId }, data: { role: 'ADMIN' } });
+    const res = await request(ctx.http)
+      .post('/v1/auth/device-keys')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ publicKey: publicKeyJwk });
+    if (res.status !== 201)
+      throw new Error(`device-key registration failed: ${res.status} ${JSON.stringify(res.body)}`);
+    if (opts.role === 'ADMIN')
+      await ctx.prisma.user.update({ where: { id: userId }, data: { role: 'ADMIN' } });
     return new TestClient(ctx, userId, email, sessionId, token, privateKey, publicKeyJwk);
   }
 
-  headers(method: string, url: string, rawBody = '', overrides: { timestamp?: number; nonce?: string; token?: string } = {}) {
+  headers(
+    method: string,
+    url: string,
+    rawBody = '',
+    overrides: { timestamp?: number; nonce?: string; token?: string } = {},
+  ) {
     const { token = this.token, ...rest } = overrides;
     return signRequest({ method, url, rawBody, token, privateKey: this.privateKey, ...rest });
   }
@@ -2889,13 +3176,19 @@ export class TestClient {
 
   post(url: string, body?: unknown): Test {
     const raw = body === undefined ? '' : JSON.stringify(body);
-    const req = request(this.ctx.http).post(url).set(this.headers('POST', url, raw));
+    const req = request(this.ctx.http)
+      .post(url)
+      .set(this.headers('POST', url, raw));
     return body === undefined ? req : req.set('Content-Type', 'application/json').send(raw);
   }
 
   patch(url: string, body: unknown): Test {
     const raw = JSON.stringify(body);
-    return request(this.ctx.http).patch(url).set(this.headers('PATCH', url, raw)).set('Content-Type', 'application/json').send(raw);
+    return request(this.ctx.http)
+      .patch(url)
+      .set(this.headers('PATCH', url, raw))
+      .set('Content-Type', 'application/json')
+      .send(raw);
   }
 }
 ```
@@ -2903,6 +3196,7 @@ export class TestClient {
 - [ ] **Step 7: Write the failing auth-access integration test**
 
 `test/integration/auth/auth-access.int-spec.ts`:
+
 ```ts
 import { randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
@@ -2929,14 +3223,20 @@ describe('Authenticated API access', () => {
 
   it('rejects missing or non-bearer credentials with UNAUTHENTICATED', async () => {
     expect(code(await request(ctx.http).get('/v1/auth/me'))).toBe('UNAUTHENTICATED');
-    expect(code(await request(ctx.http).get('/v1/auth/me').set('Authorization', 'Basic abc'))).toBe('UNAUTHENTICATED');
+    expect(code(await request(ctx.http).get('/v1/auth/me').set('Authorization', 'Basic abc'))).toBe(
+      'UNAUTHENTICATED',
+    );
   });
 
   it('rejects invalid and expired tokens', async () => {
     const bad = await ctx.idp.token({ audience: 'service_role' });
-    expect(code(await request(ctx.http).get('/v1/auth/me').set('Authorization', `Bearer ${bad}`))).toBe('INVALID_TOKEN');
+    expect(code(await request(ctx.http).get('/v1/auth/me').set('Authorization', `Bearer ${bad}`))).toBe(
+      'INVALID_TOKEN',
+    );
     const expired = await ctx.idp.token({ expiresInSeconds: -60 });
-    expect(code(await request(ctx.http).get('/v1/auth/me').set('Authorization', `Bearer ${expired}`))).toBe('TOKEN_EXPIRED');
+    expect(code(await request(ctx.http).get('/v1/auth/me').set('Authorization', `Bearer ${expired}`))).toBe(
+      'TOKEN_EXPIRED',
+    );
   });
 
   it('requires a signature: a valid token alone is not sufficient', async () => {
@@ -2956,21 +3256,31 @@ describe('Authenticated API access', () => {
   it('rejects a stolen token used with the attacker’s own key', async () => {
     const victim = await TestClient.register(ctx);
     const attacker = newKeyPair();
-    const headers = signRequest({ method: 'GET', url: '/v1/auth/me', rawBody: '', token: victim.token, privateKey: attacker.privateKey });
+    const headers = signRequest({
+      method: 'GET',
+      url: '/v1/auth/me',
+      rawBody: '',
+      token: victim.token,
+      privateKey: attacker.privateKey,
+    });
     expect(code(await request(ctx.http).get('/v1/auth/me').set(headers))).toBe('INVALID_SIGNATURE');
   });
 
   it('rejects a new token for another session of the same user (key is session-bound)', async () => {
     const client = await TestClient.register(ctx);
     const otherSession = await ctx.idp.token({ userId: client.userId, sessionId: randomUUID() });
-    const res = await request(ctx.http).get('/v1/auth/me').set(client.headers('GET', '/v1/auth/me', '', { token: otherSession }));
+    const res = await request(ctx.http)
+      .get('/v1/auth/me')
+      .set(client.headers('GET', '/v1/auth/me', '', { token: otherSession }));
     expect(code(res)).toBe('KEY_NOT_BOUND');
   });
 
   it('rejects a session_id reused under a different subject', async () => {
     const client = await TestClient.register(ctx);
     const forged = await ctx.idp.token({ userId: randomUUID(), sessionId: client.sessionId });
-    const res = await request(ctx.http).get('/v1/auth/me').set(client.headers('GET', '/v1/auth/me', '', { token: forged }));
+    const res = await request(ctx.http)
+      .get('/v1/auth/me')
+      .set(client.headers('GET', '/v1/auth/me', '', { token: forged }));
     expect(code(res)).toBe('KEY_NOT_BOUND');
   });
 
@@ -2979,9 +3289,13 @@ describe('Authenticated API access', () => {
     const tampered = await request(ctx.http).get('/v1/auth/me?x=1').set(client.headers('GET', '/v1/auth/me'));
     expect(code(tampered)).toBe('INVALID_SIGNATURE');
     const now = Math.floor(Date.now() / 1000);
-    const stale = await request(ctx.http).get('/v1/auth/me').set(client.headers('GET', '/v1/auth/me', '', { timestamp: now - 120 }));
+    const stale = await request(ctx.http)
+      .get('/v1/auth/me')
+      .set(client.headers('GET', '/v1/auth/me', '', { timestamp: now - 120 }));
     expect(code(stale)).toBe('REQUEST_EXPIRED');
-    const future = await request(ctx.http).get('/v1/auth/me').set(client.headers('GET', '/v1/auth/me', '', { timestamp: now + 120 }));
+    const future = await request(ctx.http)
+      .get('/v1/auth/me')
+      .set(client.headers('GET', '/v1/auth/me', '', { timestamp: now + 120 }));
     expect(code(future)).toBe('REQUEST_EXPIRED');
     const headers = client.headers('GET', '/v1/auth/me');
     expect((await request(ctx.http).get('/v1/auth/me').set(headers)).status).toBe(200);
@@ -3001,7 +3315,10 @@ describe('Authenticated API access', () => {
 
     it('rejects binding more than 300s after authentication', async () => {
       const token = await ctx.idp.token({ authenticatedAt: new Date(Date.now() - 10 * 60 * 1000) });
-      const res = await request(ctx.http).post('/v1/auth/device-keys').set('Authorization', `Bearer ${token}`).send({ publicKey: newKeyPair().publicKeyJwk });
+      const res = await request(ctx.http)
+        .post('/v1/auth/device-keys')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ publicKey: newKeyPair().publicKeyJwk });
       expect(res.status).toBe(403);
       expect(code(res)).toBe('KEY_BINDING_WINDOW_CLOSED');
     });
@@ -3017,7 +3334,14 @@ describe('Authenticated API access', () => {
       const offCurve = await request(ctx.http)
         .post('/v1/auth/device-keys')
         .set('Authorization', `Bearer ${token}`)
-        .send({ publicKey: { kty: 'EC', crv: 'P-256', x: randomBytes(32).toString('base64url'), y: randomBytes(32).toString('base64url') } });
+        .send({
+          publicKey: {
+            kty: 'EC',
+            crv: 'P-256',
+            x: randomBytes(32).toString('base64url'),
+            y: randomBytes(32).toString('base64url'),
+          },
+        });
       expect(offCurve.status).toBe(400);
       expect(await ctx.prisma.deviceBinding.count()).toBe(0);
     });
@@ -3034,12 +3358,14 @@ describe('Authenticated API access', () => {
 
 Run: `npx jest -c jest.int.config.js test/integration/auth/auth-access`
 Expected: PASS (13 tests) once Steps 1–6 are in place. Common fixes:
+
 - If Nest can't resolve `AuthGuard` dependencies, check that `CoreModule`, `PrismaModule` and `RedisModule` are `@Global()` and imported in `AppModule`.
 - If `@CurrentToken()` returns `undefined`, the route is missing `@BearerOnly()`.
 
 - [ ] **Step 9: Re-run the whole integration suite, then commit**
 
 Run: `npm run test:int`. Expected: all previous suites still PASS.
+
 ```bash
 npm run lint && npm run typecheck
 git add -A && git commit -m "feat(auth): session-bound device keys, signed-request auth guard, RBAC guard, /auth/me
@@ -3052,10 +3378,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 8: Subscriptions domain
 
 **Files:**
+
 - Create: `src/subscriptions/domain/value-objects.ts`, `src/subscriptions/domain/services/pricing-catalog.ts`, `src/subscriptions/domain/services/period-calculator.ts`, `src/subscriptions/domain/entities/subscription.ts`, `src/subscriptions/domain/policies/subscription-access.policy.ts`, `src/subscriptions/domain/ports.ts`
 - Test: `test/unit/subscriptions/period-calculator.spec.ts`, `test/unit/subscriptions/subscription.spec.ts`, `test/unit/subscriptions/subscription-access.policy.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `DomainError`, `Actor`, `isAdmin`.
 - Produces:
   - `type Tier = 'BASIC'|'PRO'|'ENTERPRISE'`, `type BillingCycle = 'MONTHLY'|'YEARLY'`, `type SubscriptionStatus = 'ACTIVE'|'INACTIVE'`, `type InactiveReason = 'CANCELLED'|'PAYMENT_FAILED'|'EXPIRED'`
@@ -3073,6 +3401,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the failing tests**
 
 `test/unit/subscriptions/period-calculator.spec.ts`:
+
 ```ts
 import { addCycle, addMonthsUtc } from '../../../src/subscriptions/domain/services/period-calculator';
 
@@ -3085,19 +3414,33 @@ describe('period calculator (UTC, end-of-month clamping)', () => {
     expect(addMonthsUtc(new Date('2028-01-31T00:00:00Z'), 1).toISOString()).toBe('2028-02-29T00:00:00.000Z');
   });
   it('rolls over the year for December and for yearly cycles', () => {
-    expect(addCycle(new Date('2026-12-15T00:00:00Z'), 'MONTHLY').toISOString()).toBe('2027-01-15T00:00:00.000Z');
-    expect(addCycle(new Date('2028-02-29T00:00:00Z'), 'YEARLY').toISOString()).toBe('2029-02-28T00:00:00.000Z');
+    expect(addCycle(new Date('2026-12-15T00:00:00Z'), 'MONTHLY').toISOString()).toBe(
+      '2027-01-15T00:00:00.000Z',
+    );
+    expect(addCycle(new Date('2028-02-29T00:00:00Z'), 'YEARLY').toISOString()).toBe(
+      '2029-02-28T00:00:00.000Z',
+    );
   });
 });
 ```
 
 `test/unit/subscriptions/subscription.spec.ts`:
+
 ```ts
 import { Subscription } from '../../../src/subscriptions/domain/entities/subscription';
 
 const now = new Date('2026-09-24T12:00:00Z');
 const make = (over: Partial<Parameters<typeof Subscription.create>[0]> = {}) =>
-  Subscription.create({ id: 's1', userId: 'u1', tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true, paymentSucceeded: true, now, ...over });
+  Subscription.create({
+    id: 's1',
+    userId: 'u1',
+    tier: 'BASIC',
+    billingCycle: 'MONTHLY',
+    autoRenew: true,
+    paymentSucceeded: true,
+    now,
+    ...over,
+  });
 
 describe('Subscription lifecycle', () => {
   it('creates an active bundle with catalog quota, price and dates', () => {
@@ -3114,13 +3457,21 @@ describe('Subscription lifecycle', () => {
       autoRenew: true,
       createdAt: now,
     });
-    expect(make({ tier: 'PRO', billingCycle: 'YEARLY' }).toSnapshot()).toMatchObject({ maxMessages: 100, priceCents: 29990 });
+    expect(make({ tier: 'PRO', billingCycle: 'YEARLY' }).toSnapshot()).toMatchObject({
+      maxMessages: 100,
+      priceCents: 29990,
+    });
     expect(make({ tier: 'ENTERPRISE' }).toSnapshot().maxMessages).toBeNull();
   });
 
   it('creates an inactive PAYMENT_FAILED bundle when the first charge fails', () => {
     const s = make({ paymentSucceeded: false });
-    expect(s.toSnapshot()).toMatchObject({ status: 'INACTIVE', inactiveReason: 'PAYMENT_FAILED', renewalDate: null, autoRenew: false });
+    expect(s.toSnapshot()).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'PAYMENT_FAILED',
+      renewalDate: null,
+      autoRenew: false,
+    });
     expect(s.isUsableAt(now)).toBe(false);
   });
 
@@ -3189,13 +3540,21 @@ describe('Subscription lifecycle', () => {
   it('deactivates on failed renewal payment', () => {
     const s = make();
     s.renew(new Date('2026-10-25T00:00:00Z'), false);
-    expect(s.toSnapshot()).toMatchObject({ status: 'INACTIVE', inactiveReason: 'PAYMENT_FAILED', renewalDate: null });
+    expect(s.toSnapshot()).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'PAYMENT_FAILED',
+      renewalDate: null,
+    });
   });
 
   it('expires at period end when auto-renew is off', () => {
     const s = make({ autoRenew: false });
     s.renew(new Date('2026-10-25T00:00:00Z'), undefined);
-    expect(s.toSnapshot()).toMatchObject({ status: 'INACTIVE', inactiveReason: 'EXPIRED', renewalDate: null });
+    expect(s.toSnapshot()).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'EXPIRED',
+      renewalDate: null,
+    });
   });
 
   it('ignores renew() when not yet due', () => {
@@ -3207,21 +3566,39 @@ describe('Subscription lifecycle', () => {
 ```
 
 `test/unit/subscriptions/subscription-access.policy.spec.ts`:
+
 ```ts
 import type { Actor } from '../../../src/shared/domain/actor';
 import { Subscription } from '../../../src/subscriptions/domain/entities/subscription';
-import { accessDenied, SubscriptionAccessPolicy as P } from '../../../src/subscriptions/domain/policies/subscription-access.policy';
+import {
+  accessDenied,
+  SubscriptionAccessPolicy as P,
+} from '../../../src/subscriptions/domain/policies/subscription-access.policy';
 
 const owner: Actor = { userId: 'u1', role: 'USER', sessionId: 's' };
 const other: Actor = { userId: 'u2', role: 'USER', sessionId: 's' };
 const admin: Actor = { userId: 'a1', role: 'ADMIN', sessionId: 's' };
-const sub = Subscription.create({ id: 'x', userId: 'u1', tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true, paymentSucceeded: true, now: new Date() });
+const sub = Subscription.create({
+  id: 'x',
+  userId: 'u1',
+  tier: 'BASIC',
+  billingCycle: 'MONTHLY',
+  autoRenew: true,
+  paymentSucceeded: true,
+  now: new Date(),
+});
 
 describe('SubscriptionAccessPolicy', () => {
   it.each([
-    ['canView', owner, true], ['canView', other, false], ['canView', admin, true],
-    ['canCancel', owner, true], ['canCancel', other, false], ['canCancel', admin, true],
-    ['canSetAutoRenew', owner, true], ['canSetAutoRenew', other, false], ['canSetAutoRenew', admin, false],
+    ['canView', owner, true],
+    ['canView', other, false],
+    ['canView', admin, true],
+    ['canCancel', owner, true],
+    ['canCancel', other, false],
+    ['canCancel', admin, true],
+    ['canSetAutoRenew', owner, true],
+    ['canSetAutoRenew', other, false],
+    ['canSetAutoRenew', admin, false],
   ] as const)('%s for %o is %s', (rule, actor, expected) => {
     expect(P[rule](actor, sub)).toBe(expected);
   });
@@ -3247,6 +3624,7 @@ Expected: FAIL (modules not found).
 - [ ] **Step 3: Implement the subscriptions domain**
 
 `src/subscriptions/domain/value-objects.ts`:
+
 ```ts
 export type Tier = 'BASIC' | 'PRO' | 'ENTERPRISE';
 export type BillingCycle = 'MONTHLY' | 'YEARLY';
@@ -3257,6 +3635,7 @@ export const BILLING_CYCLES = ['MONTHLY', 'YEARLY'] as const;
 ```
 
 `src/subscriptions/domain/services/pricing-catalog.ts`:
+
 ```ts
 import type { BillingCycle, Tier } from '../value-objects';
 
@@ -3275,23 +3654,34 @@ export const priceFor = (tier: Tier, cycle: BillingCycle): number => PRICING_CAT
 ```
 
 `src/subscriptions/domain/services/period-calculator.ts`:
+
 ```ts
 import type { BillingCycle } from '../value-objects';
 
 /** Adds calendar months in UTC, clamping to the last day of the target month. */
 export function addMonthsUtc(date: Date, months: number): Date {
   const target = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1, date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds(), date.getUTCMilliseconds()),
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth() + months,
+      1,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds(),
+    ),
   );
   const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
   target.setUTCDate(Math.min(date.getUTCDate(), lastDay));
   return target;
 }
 
-export const addCycle = (date: Date, cycle: BillingCycle): Date => addMonthsUtc(date, cycle === 'MONTHLY' ? 1 : 12);
+export const addCycle = (date: Date, cycle: BillingCycle): Date =>
+  addMonthsUtc(date, cycle === 'MONTHLY' ? 1 : 12);
 ```
 
 `src/subscriptions/domain/entities/subscription.ts`:
+
 ```ts
 import { DomainError } from '../../../shared/domain/errors';
 import { addCycle } from '../services/period-calculator';
@@ -3357,27 +3747,48 @@ export class Subscription {
     return { ...this.props };
   }
 
-  get id(): string { return this.props.id; }
-  get userId(): string { return this.props.userId; }
-  get autoRenew(): boolean { return this.props.autoRenew; }
-  get priceCents(): number { return this.props.priceCents; }
-  get status(): SubscriptionStatus { return this.props.status; }
-  get createdAt(): Date { return this.props.createdAt; }
-  get startDate(): Date { return this.props.startDate; }
-  get endDate(): Date { return this.props.endDate; }
+  get id(): string {
+    return this.props.id;
+  }
+  get userId(): string {
+    return this.props.userId;
+  }
+  get autoRenew(): boolean {
+    return this.props.autoRenew;
+  }
+  get priceCents(): number {
+    return this.props.priceCents;
+  }
+  get status(): SubscriptionStatus {
+    return this.props.status;
+  }
+  get createdAt(): Date {
+    return this.props.createdAt;
+  }
+  get startDate(): Date {
+    return this.props.startDate;
+  }
+  get endDate(): Date {
+    return this.props.endDate;
+  }
 
   remaining(): number | null {
-    return this.props.maxMessages === null ? null : Math.max(0, this.props.maxMessages - this.props.usedMessages);
+    return this.props.maxMessages === null
+      ? null
+      : Math.max(0, this.props.maxMessages - this.props.usedMessages);
   }
 
   isUsableAt(now: Date): boolean {
     const p = this.props;
     const remaining = this.remaining();
-    return p.status === 'ACTIVE' && p.startDate <= now && now < p.endDate && (remaining === null || remaining > 0);
+    return (
+      p.status === 'ACTIVE' && p.startDate <= now && now < p.endDate && (remaining === null || remaining > 0)
+    );
   }
 
   consume(now: Date): void {
-    if (!this.isUsableAt(now)) throw new DomainError('QUOTA_EXHAUSTED', 'Subscription has no remaining messages');
+    if (!this.isUsableAt(now))
+      throw new DomainError('QUOTA_EXHAUSTED', 'Subscription has no remaining messages');
     this.props.usedMessages += 1;
   }
 
@@ -3408,20 +3819,31 @@ export class Subscription {
     if (!paymentSucceeded) return this.deactivate('PAYMENT_FAILED');
     const startDate = this.props.endDate;
     const endDate = addCycle(startDate, this.props.billingCycle);
-    Object.assign(this.props, { startDate, endDate, renewalDate: endDate, usedMessages: 0 } satisfies Partial<SubscriptionProps>);
+    Object.assign(this.props, {
+      startDate,
+      endDate,
+      renewalDate: endDate,
+      usedMessages: 0,
+    } satisfies Partial<SubscriptionProps>);
   }
 
   private deactivate(reason: InactiveReason): void {
-    Object.assign(this.props, { status: 'INACTIVE', inactiveReason: reason, renewalDate: null } satisfies Partial<SubscriptionProps>);
+    Object.assign(this.props, {
+      status: 'INACTIVE',
+      inactiveReason: reason,
+      renewalDate: null,
+    } satisfies Partial<SubscriptionProps>);
   }
 
   private assertActive(): void {
-    if (this.props.status !== 'ACTIVE') throw new DomainError('SUBSCRIPTION_NOT_ACTIVE', 'Subscription is not active');
+    if (this.props.status !== 'ACTIVE')
+      throw new DomainError('SUBSCRIPTION_NOT_ACTIVE', 'Subscription is not active');
   }
 }
 ```
 
 `src/subscriptions/domain/policies/subscription-access.policy.ts`:
+
 ```ts
 import { isAdmin, type Actor } from '../../../shared/domain/actor';
 import { DomainError } from '../../../shared/domain/errors';
@@ -3433,15 +3855,19 @@ export const SubscriptionAccessPolicy = {
   canView: (actor: Actor, sub: Subscription): boolean => isAdmin(actor) || owns(actor, sub),
   canCancel: (actor: Actor, sub: Subscription): boolean => isAdmin(actor) || owns(actor, sub),
   canSetAutoRenew: (actor: Actor, sub: Subscription): boolean => owns(actor, sub),
-  canListFor: (actor: Actor, targetUserId: string): boolean => isAdmin(actor) || targetUserId === actor.userId,
+  canListFor: (actor: Actor, targetUserId: string): boolean =>
+    isAdmin(actor) || targetUserId === actor.userId,
 };
 
 /** Non-admins must not learn that someone else's subscription exists. */
 export const accessDenied = (actor: Actor): DomainError =>
-  isAdmin(actor) ? new DomainError('FORBIDDEN', 'Not allowed for this subscription') : new DomainError('NOT_FOUND', 'Subscription not found');
+  isAdmin(actor)
+    ? new DomainError('FORBIDDEN', 'Not allowed for this subscription')
+    : new DomainError('NOT_FOUND', 'Subscription not found');
 ```
 
 `src/subscriptions/domain/ports.ts`:
+
 ```ts
 export interface PaymentGateway {
   charge(input: { subscriptionId: string; userId: string; amountCents: number }): Promise<{ ok: boolean }>;
@@ -3468,11 +3894,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 9: Subscriptions API (create, list, auto-renew, cancel)
 
 **Files:**
+
 - Create: `src/subscriptions/repositories/subscription.repository.ts`, `src/subscriptions/repositories/prisma-subscription.repository.ts`, `src/subscriptions/infrastructure/simulated-payment-gateway.ts`, `src/subscriptions/application/create-subscription.use-case.ts`, `src/subscriptions/application/list-subscriptions.use-case.ts`, `src/subscriptions/application/set-auto-renew.use-case.ts`, `src/subscriptions/application/cancel-subscription.use-case.ts`, `src/subscriptions/controllers/subscriptions.controller.ts`, `src/subscriptions/subscriptions.module.ts`, `src/subscriptions/index.ts`, `test/support/fake-payment-gateway.ts`
 - Modify: `src/app.module.ts` (import `SubscriptionsModule`), `test/support/test-app.ts` (override `PAYMENT_GATEWAY`, expose `payments`)
 - Test: `test/integration/subscriptions/subscriptions-api.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: the Task 8 domain, `TransactionRunner`, `Clock`, `PrismaTransactionRunner`, decorators, `ZodValidationPipe`.
 - Produces:
   - `SubscriptionRepository` with:
@@ -3490,6 +3918,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the repository interface and Prisma implementation**
 
 `src/subscriptions/repositories/subscription.repository.ts`:
+
 ```ts
 import type { Subscription } from '../domain/entities/subscription';
 
@@ -3509,6 +3938,7 @@ export const SUBSCRIPTION_REPOSITORY = Symbol('SUBSCRIPTION_REPOSITORY');
 ```
 
 `src/subscriptions/repositories/prisma-subscription.repository.ts`:
+
 ```ts
 import { Injectable } from '@nestjs/common';
 import type { Subscription as Row } from '@prisma/client';
@@ -3550,12 +3980,16 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
   }
 
   async listByUser(userId: string, limit: number): Promise<Subscription[]> {
-    const rows = await this.tx.db().subscription.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
+    const rows = await this.tx
+      .db()
+      .subscription.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
     return rows.map(toDomain);
   }
 
   async listActiveForUser(userId: string): Promise<Subscription[]> {
-    const rows = await this.tx.db().subscription.findMany({ where: { userId, status: 'ACTIVE' }, orderBy: { id: 'asc' } });
+    const rows = await this.tx
+      .db()
+      .subscription.findMany({ where: { userId, status: 'ACTIVE' }, orderBy: { id: 'asc' } });
     return rows.map(toDomain);
   }
 
@@ -3576,12 +4010,16 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
   async save(sub: Subscription): Promise<void> {
     const s = sub.toSnapshot();
     const { id, userId, createdAt, ...mutable } = s;
-    await this.tx.db().subscription.upsert({ where: { id }, create: { id, userId, createdAt, ...mutable }, update: mutable });
+    await this.tx
+      .db()
+      .subscription.upsert({ where: { id }, create: { id, userId, createdAt, ...mutable }, update: mutable });
   }
 
   private async byIds(ids: string[]): Promise<Subscription[]> {
     if (ids.length === 0) return [];
-    const rows = await this.tx.db().subscription.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
+    const rows = await this.tx
+      .db()
+      .subscription.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
     return rows.map(toDomain);
   }
 }
@@ -3590,6 +4028,7 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
 - [ ] **Step 2: Write the payment gateways, use cases, controller and module**
 
 `src/subscriptions/infrastructure/simulated-payment-gateway.ts`:
+
 ```ts
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../../config/env';
@@ -3601,16 +4040,26 @@ export class SimulatedPaymentGateway implements PaymentGateway {
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
-  async charge(input: { subscriptionId: string; userId: string; amountCents: number }): Promise<{ ok: boolean }> {
+  async charge(input: {
+    subscriptionId: string;
+    userId: string;
+    amountCents: number;
+  }): Promise<{ ok: boolean }> {
     await new Promise((r) => setTimeout(r, 20 + Math.floor(Math.random() * 80)));
     const ok = Math.random() >= this.config.PAYMENT_FAILURE_RATE;
-    this.logger.log({ msg: 'payment simulated', subscriptionId: input.subscriptionId, amountCents: input.amountCents, ok });
+    this.logger.log({
+      msg: 'payment simulated',
+      subscriptionId: input.subscriptionId,
+      amountCents: input.amountCents,
+      ok,
+    });
     return { ok };
   }
 }
 ```
 
 `test/support/fake-payment-gateway.ts`:
+
 ```ts
 import type { PaymentGateway } from '../../src/subscriptions/domain/ports';
 
@@ -3635,6 +4084,7 @@ export class FakePaymentGateway implements PaymentGateway {
 ```
 
 `src/shared/http/list-query.ts`:
+
 ```ts
 import { z } from 'zod';
 
@@ -3646,6 +4096,7 @@ export type ListQuery = z.infer<typeof listQuerySchema>;
 ```
 
 `src/subscriptions/application/create-subscription.use-case.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
@@ -3656,7 +4107,10 @@ import { Subscription, type SubscriptionProps } from '../domain/entities/subscri
 import { PAYMENT_GATEWAY, type PaymentGateway } from '../domain/ports';
 import { priceFor } from '../domain/services/pricing-catalog';
 import type { BillingCycle, Tier } from '../domain/value-objects';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 @Injectable()
 export class CreateSubscriptionUseCase {
@@ -3667,39 +4121,64 @@ export class CreateSubscriptionUseCase {
   ) {}
 
   /** Always creates for the actor themselves (policy: no creating on behalf of others). */
-  async execute(actor: Actor, input: { tier: Tier; billingCycle: BillingCycle; autoRenew: boolean }): Promise<SubscriptionProps> {
+  async execute(
+    actor: Actor,
+    input: { tier: Tier; billingCycle: BillingCycle; autoRenew: boolean },
+  ): Promise<SubscriptionProps> {
     const id = randomUUID();
-    const payment = await this.payments.charge({ subscriptionId: id, userId: actor.userId, amountCents: priceFor(input.tier, input.billingCycle) });
-    const sub = Subscription.create({ id, userId: actor.userId, ...input, paymentSucceeded: payment.ok, now: this.clock.now() });
+    const payment = await this.payments.charge({
+      subscriptionId: id,
+      userId: actor.userId,
+      amountCents: priceFor(input.tier, input.billingCycle),
+    });
+    const sub = Subscription.create({
+      id,
+      userId: actor.userId,
+      ...input,
+      paymentSucceeded: payment.ok,
+      now: this.clock.now(),
+    });
     await this.subs.save(sub);
-    if (!payment.ok) throw new DomainError('PAYMENT_FAILED', 'Payment was declined; the subscription is inactive', { subscriptionId: id });
+    if (!payment.ok)
+      throw new DomainError('PAYMENT_FAILED', 'Payment was declined; the subscription is inactive', {
+        subscriptionId: id,
+      });
     return sub.toSnapshot();
   }
 }
 ```
 
 `src/subscriptions/application/list-subscriptions.use-case.ts`:
+
 ```ts
 import { Inject, Injectable } from '@nestjs/common';
 import type { Actor } from '../../shared/domain/actor';
 import { DomainError } from '../../shared/domain/errors';
 import type { SubscriptionProps } from '../domain/entities/subscription';
 import { SubscriptionAccessPolicy } from '../domain/policies/subscription-access.policy';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 @Injectable()
 export class ListSubscriptionsUseCase {
   constructor(@Inject(SUBSCRIPTION_REPOSITORY) private readonly subs: SubscriptionRepository) {}
 
-  async execute(actor: Actor, query: { userId?: string | undefined; limit: number }): Promise<SubscriptionProps[]> {
+  async execute(
+    actor: Actor,
+    query: { userId?: string | undefined; limit: number },
+  ): Promise<SubscriptionProps[]> {
     const target = query.userId ?? actor.userId;
-    if (!SubscriptionAccessPolicy.canListFor(actor, target)) throw new DomainError('FORBIDDEN', 'Cannot list another user’s subscriptions');
+    if (!SubscriptionAccessPolicy.canListFor(actor, target))
+      throw new DomainError('FORBIDDEN', 'Cannot list another user’s subscriptions');
     return (await this.subs.listByUser(target, query.limit)).map((s) => s.toSnapshot());
   }
 }
 ```
 
 `src/subscriptions/application/set-auto-renew.use-case.ts`:
+
 ```ts
 import { Inject, Injectable } from '@nestjs/common';
 import { TRANSACTION_RUNNER, type TransactionRunner } from '../../shared/application/transaction-runner';
@@ -3707,7 +4186,10 @@ import type { Actor } from '../../shared/domain/actor';
 import { DomainError } from '../../shared/domain/errors';
 import type { SubscriptionProps } from '../domain/entities/subscription';
 import { accessDenied, SubscriptionAccessPolicy } from '../domain/policies/subscription-access.policy';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 @Injectable()
 export class SetAutoRenewUseCase {
@@ -3730,6 +4212,7 @@ export class SetAutoRenewUseCase {
 ```
 
 `src/subscriptions/application/cancel-subscription.use-case.ts`:
+
 ```ts
 import { Inject, Injectable } from '@nestjs/common';
 import { TRANSACTION_RUNNER, type TransactionRunner } from '../../shared/application/transaction-runner';
@@ -3738,7 +4221,10 @@ import { CLOCK, type Clock } from '../../shared/domain/clock';
 import { DomainError } from '../../shared/domain/errors';
 import type { SubscriptionProps } from '../domain/entities/subscription';
 import { accessDenied, SubscriptionAccessPolicy } from '../domain/policies/subscription-access.policy';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 @Injectable()
 export class CancelSubscriptionUseCase {
@@ -3762,6 +4248,7 @@ export class CancelSubscriptionUseCase {
 ```
 
 `src/subscriptions/controllers/subscriptions.controller.ts`:
+
 ```ts
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
@@ -3775,7 +4262,11 @@ import { ListSubscriptionsUseCase } from '../application/list-subscriptions.use-
 import { SetAutoRenewUseCase } from '../application/set-auto-renew.use-case';
 import { BILLING_CYCLES, TIERS } from '../domain/value-objects';
 
-const createSchema = z.strictObject({ tier: z.enum(TIERS), billingCycle: z.enum(BILLING_CYCLES), autoRenew: z.boolean() });
+const createSchema = z.strictObject({
+  tier: z.enum(TIERS),
+  billingCycle: z.enum(BILLING_CYCLES),
+  autoRenew: z.boolean(),
+});
 const patchSchema = z.strictObject({ autoRenew: z.boolean() });
 const idPipe = new ZodValidationPipe(z.uuid());
 
@@ -3792,7 +4283,10 @@ export class SubscriptionsController {
 
   @Post()
   @HttpCode(201)
-  create(@CurrentActor() actor: Actor, @Body(new ZodValidationPipe(createSchema)) body: z.infer<typeof createSchema>) {
+  create(
+    @CurrentActor() actor: Actor,
+    @Body(new ZodValidationPipe(createSchema)) body: z.infer<typeof createSchema>,
+  ) {
     return this.createUc.execute(actor, body);
   }
 
@@ -3802,7 +4296,11 @@ export class SubscriptionsController {
   }
 
   @Patch(':id')
-  setAutoRenew(@CurrentActor() actor: Actor, @Param('id', idPipe) id: string, @Body(new ZodValidationPipe(patchSchema)) body: z.infer<typeof patchSchema>) {
+  setAutoRenew(
+    @CurrentActor() actor: Actor,
+    @Param('id', idPipe) id: string,
+    @Body(new ZodValidationPipe(patchSchema)) body: z.infer<typeof patchSchema>,
+  ) {
     return this.autoRenewUc.execute(actor, id, body.autoRenew);
   }
 
@@ -3815,6 +4313,7 @@ export class SubscriptionsController {
 ```
 
 `src/subscriptions/subscriptions.module.ts`:
+
 ```ts
 import { Module } from '@nestjs/common';
 import { CancelSubscriptionUseCase } from './application/cancel-subscription.use-case';
@@ -3843,11 +4342,13 @@ export class SubscriptionsModule {}
 ```
 
 `src/subscriptions/index.ts`:
+
 ```ts
 export { SubscriptionsModule } from './subscriptions.module';
 ```
 
 Add `SubscriptionsModule` to `AppModule.imports`. In `test/support/test-app.ts`:
+
 - add `import { PAYMENT_GATEWAY } from '../../src/subscriptions/domain/ports';` and `import { FakePaymentGateway } from './fake-payment-gateway';`
 - add `payments: FakePaymentGateway` to `TestContext`
 - in `createTestApp`, create `const payments = new FakePaymentGateway();` and chain `.overrideProvider(PAYMENT_GATEWAY).useValue(payments)` before `.compile()`
@@ -3857,6 +4358,7 @@ Add `SubscriptionsModule` to `AppModule.imports`. In `test/support/test-app.ts`:
 - [ ] **Step 3: Write the failing API integration test**
 
 `test/integration/subscriptions/subscriptions-api.int-spec.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import { closeTestApp, createTestApp, resetState, type TestContext } from '../../support/test-app';
@@ -3875,49 +4377,101 @@ describe('Subscriptions API', () => {
   afterAll(() => closeTestApp(ctx));
 
   it('creates an active bundle with catalog quota and price', async () => {
-    const res = await user.post('/v1/subscriptions', { tier: 'PRO', billingCycle: 'YEARLY', autoRenew: true });
+    const res = await user.post('/v1/subscriptions', {
+      tier: 'PRO',
+      billingCycle: 'YEARLY',
+      autoRenew: true,
+    });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ tier: 'PRO', billingCycle: 'YEARLY', maxMessages: 100, priceCents: 29990, status: 'ACTIVE', autoRenew: true, userId: user.userId });
-    expect(new Date(res.body.endDate).getUTCFullYear()).toBe(new Date(res.body.startDate).getUTCFullYear() + 1);
+    expect(res.body).toMatchObject({
+      tier: 'PRO',
+      billingCycle: 'YEARLY',
+      maxMessages: 100,
+      priceCents: 29990,
+      status: 'ACTIVE',
+      autoRenew: true,
+      userId: user.userId,
+    });
+    expect(new Date(res.body.endDate).getUTCFullYear()).toBe(
+      new Date(res.body.startDate).getUTCFullYear() + 1,
+    );
   });
 
   it('returns 402 PAYMENT_FAILED and persists the bundle as inactive when payment fails', async () => {
     ctx.payments.failNext();
-    const res = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const res = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     expect(res.status).toBe(402);
     expect(res.body.error.code).toBe('PAYMENT_FAILED');
     const list = await user.get('/v1/subscriptions');
     expect(list.body.items).toHaveLength(1);
-    expect(list.body.items[0]).toMatchObject({ status: 'INACTIVE', inactiveReason: 'PAYMENT_FAILED', id: res.body.error.details.subscriptionId });
+    expect(list.body.items[0]).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'PAYMENT_FAILED',
+      id: res.body.error.details.subscriptionId,
+    });
   });
 
   it('rejects mass-assignment attempts on create and patch', async () => {
-    const create = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true, userId: randomUUID(), maxMessages: 1e6 });
+    const create = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+      userId: randomUUID(),
+      maxMessages: 1e6,
+    });
     expect(create.status).toBe(400);
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
-    const patch = await user.patch(`/v1/subscriptions/${sub.body.id}`, { autoRenew: false, status: 'ACTIVE' });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
+    const patch = await user.patch(`/v1/subscriptions/${sub.body.id}`, {
+      autoRenew: false,
+      status: 'ACTIVE',
+    });
     expect(patch.status).toBe(400);
   });
 
   it('toggles auto-renew for the owner', async () => {
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     const res = await user.patch(`/v1/subscriptions/${sub.body.id}`, { autoRenew: false });
     expect(res.status).toBe(200);
     expect(res.body.autoRenew).toBe(false);
   });
 
   it('cancels immediately, then refuses to cancel again', async () => {
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     const res = await user.post(`/v1/subscriptions/${sub.body.id}/cancel`);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'INACTIVE', inactiveReason: 'CANCELLED', autoRenew: false, renewalDate: null });
+    expect(res.body).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'CANCELLED',
+      autoRenew: false,
+      renewalDate: null,
+    });
     const again = await user.post(`/v1/subscriptions/${sub.body.id}/cancel`);
     expect(again.status).toBe(409);
     expect(again.body.error.code).toBe('SUBSCRIPTION_NOT_ACTIVE');
   });
 
   it('enforces domain policy: other users get 404, admins may cancel but not toggle auto-renew', async () => {
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     const other = await TestClient.register(ctx);
     expect((await other.post(`/v1/subscriptions/${sub.body.id}/cancel`)).status).toBe(404);
     const admin = await TestClient.register(ctx, { role: 'ADMIN' });
@@ -3969,11 +4523,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 10: Billing cycle: renewal job and admin trigger
 
 **Files:**
+
 - Create: `src/subscriptions/application/run-billing-cycle.use-case.ts`, `src/subscriptions/infrastructure/billing.scheduler.ts`, `src/subscriptions/controllers/admin-billing.controller.ts`
 - Modify: `src/subscriptions/subscriptions.module.ts`, `src/app.module.ts` (add `ScheduleModule.forRoot()`)
 - Test: `test/integration/subscriptions/billing.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: `SubscriptionRepository.lockDueForRenewal`, `PaymentGateway`, `TransactionRunner`, `assertAdmin`.
 - Produces:
   - `RunBillingCycleUseCase.execute(trigger: Actor | 'scheduler'): Promise<{ processed: number; renewed: number; failed: number; expired: number }>`
@@ -3982,6 +4538,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the failing billing test**
 
 `test/integration/subscriptions/billing.int-spec.ts`:
+
 ```ts
 import { closeTestApp, createTestApp, resetState, type TestContext } from '../../support/test-app';
 import { TestClient } from '../../support/test-client';
@@ -4003,7 +4560,10 @@ describe('Billing cycle', () => {
   async function dueSubscription(autoRenew: boolean): Promise<string> {
     const res = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew });
     const past = new Date(Date.now() - 1000);
-    await ctx.prisma.subscription.update({ where: { id: res.body.id }, data: { endDate: past, renewalDate: past, usedMessages: 4 } });
+    await ctx.prisma.subscription.update({
+      where: { id: res.body.id },
+      data: { endDate: past, renewalDate: past, usedMessages: 4 },
+    });
     return res.body.id as string;
   }
 
@@ -4023,7 +4583,10 @@ describe('Billing cycle', () => {
     ctx.payments.failNext();
     const res = await admin.post('/v1/admin/billing/run');
     expect(res.body).toEqual({ processed: 1, renewed: 0, failed: 1, expired: 0 });
-    expect(await ctx.prisma.subscription.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'INACTIVE', inactiveReason: 'PAYMENT_FAILED' });
+    expect(await ctx.prisma.subscription.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'PAYMENT_FAILED',
+    });
   });
 
   it('expires without charging when auto-renew is off', async () => {
@@ -4032,7 +4595,10 @@ describe('Billing cycle', () => {
     const res = await admin.post('/v1/admin/billing/run');
     expect(res.body).toEqual({ processed: 1, renewed: 0, failed: 0, expired: 1 });
     expect(ctx.payments.calls).toBe(callsBefore);
-    expect(await ctx.prisma.subscription.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'INACTIVE', inactiveReason: 'EXPIRED' });
+    expect(await ctx.prisma.subscription.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'EXPIRED',
+    });
   });
 
   it('does not touch subscriptions that are not yet due', async () => {
@@ -4056,6 +4622,7 @@ Expected: FAIL with 404 NOT_FOUND on `/v1/admin/billing/run`.
 - [ ] **Step 3: Implement the use case, scheduler and admin controller**
 
 `src/subscriptions/application/run-billing-cycle.use-case.ts`:
+
 ```ts
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { TRANSACTION_RUNNER, type TransactionRunner } from '../../shared/application/transaction-runner';
@@ -4063,7 +4630,10 @@ import type { Actor } from '../../shared/domain/actor';
 import { assertAdmin } from '../../shared/domain/admin-policy';
 import { CLOCK, type Clock } from '../../shared/domain/clock';
 import { PAYMENT_GATEWAY, type PaymentGateway } from '../domain/ports';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 export interface BillingSummary {
   processed: number;
@@ -4094,14 +4664,24 @@ export class RunBillingCycleUseCase {
       const count = await this.tx.run(async () => {
         const due = await this.subs.lockDueForRenewal(now, BATCH_SIZE);
         for (const sub of due) {
-          const payment = sub.autoRenew ? await this.payments.charge({ subscriptionId: sub.id, userId: sub.userId, amountCents: sub.priceCents }) : undefined;
+          const payment = sub.autoRenew
+            ? await this.payments.charge({
+                subscriptionId: sub.id,
+                userId: sub.userId,
+                amountCents: sub.priceCents,
+              })
+            : undefined;
           sub.renew(now, payment?.ok);
           await this.subs.save(sub);
           summary.processed++;
           if (!payment) summary.expired++;
           else if (payment.ok) summary.renewed++;
           else summary.failed++;
-          this.logger.log({ msg: 'subscription billed', subscriptionId: sub.id, outcome: payment ? (payment.ok ? 'renewed' : 'payment_failed') : 'expired' });
+          this.logger.log({
+            msg: 'subscription billed',
+            subscriptionId: sub.id,
+            outcome: payment ? (payment.ok ? 'renewed' : 'payment_failed') : 'expired',
+          });
         }
         return due.length;
       });
@@ -4113,6 +4693,7 @@ export class RunBillingCycleUseCase {
 ```
 
 `src/subscriptions/infrastructure/billing.scheduler.ts`:
+
 ```ts
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
@@ -4145,7 +4726,10 @@ export class BillingScheduler implements OnModuleInit {
       const summary = await this.billing.execute('scheduler');
       if (summary.processed > 0) this.logger.log({ msg: 'billing cycle complete', ...summary });
     } catch (err) {
-      this.logger.error({ msg: 'billing cycle failed', err: err instanceof Error ? err.message : String(err) });
+      this.logger.error({
+        msg: 'billing cycle failed',
+        err: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       this.running = false;
     }
@@ -4154,6 +4738,7 @@ export class BillingScheduler implements OnModuleInit {
 ```
 
 `src/subscriptions/controllers/admin-billing.controller.ts`:
+
 ```ts
 import { Controller, HttpCode, Post } from '@nestjs/common';
 import type { Actor } from '../../shared/domain/actor';
@@ -4195,10 +4780,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 11: Chat domain: usage period, monthly usage, quota allocator, policies
 
 **Files:**
+
 - Create: `src/chat/domain/ports.ts`, `src/chat/domain/services/usage-period.ts`, `src/chat/domain/entities/monthly-usage.ts`, `src/chat/domain/entities/chat-message.ts`, `src/chat/domain/policies/bundle-selection.policy.ts`, `src/chat/domain/policies/chat-access.policy.ts`, `src/chat/domain/services/quota-allocator.ts`, `src/chat/domain/services/token-estimator.ts`
 - Test: `test/unit/chat/usage-period.spec.ts`, `test/unit/chat/quota-allocator.spec.ts`, `test/unit/chat/chat-access.policy.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `DomainError`, `Actor`, `isAdmin`.
 - Produces:
   - `interface BundleSnapshot { id: string; remaining: number | null; createdAt: Date; startDate: Date; endDate: Date }`
@@ -4220,6 +4807,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the failing tests**
 
 `test/unit/chat/usage-period.spec.ts`:
+
 ```ts
 import { UsagePeriod } from '../../../src/chat/domain/services/usage-period';
 
@@ -4241,6 +4829,7 @@ describe('UsagePeriod (UTC calendar month)', () => {
 ```
 
 `test/unit/chat/quota-allocator.spec.ts`:
+
 ```ts
 import { MonthlyUsage } from '../../../src/chat/domain/entities/monthly-usage';
 import type { BundleSnapshot } from '../../../src/chat/domain/ports';
@@ -4267,12 +4856,21 @@ describe('QuotaAllocator', () => {
   it('uses the most recently created usable bundle once free quota is exhausted', () => {
     const older = bundle('b-old', { createdAt: new Date('2026-09-01T00:00:00Z') });
     const newer = bundle('b-new', { createdAt: new Date('2026-09-10T00:00:00Z') });
-    expect(allocator.allocate({ usage: usage(3), bundles: [older, newer], now })).toEqual({ source: 'BUNDLE', subscriptionId: 'b-new' });
+    expect(allocator.allocate({ usage: usage(3), bundles: [older, newer], now })).toEqual({
+      source: 'BUNDLE',
+      subscriptionId: 'b-new',
+    });
   });
 
   it('breaks createdAt ties by id descending', () => {
     const t = new Date('2026-09-10T00:00:00Z');
-    expect(allocator.allocate({ usage: usage(3), bundles: [bundle('a', { createdAt: t }), bundle('b', { createdAt: t })], now })).toEqual({
+    expect(
+      allocator.allocate({
+        usage: usage(3),
+        bundles: [bundle('a', { createdAt: t }), bundle('b', { createdAt: t })],
+        now,
+      }),
+    ).toEqual({
       source: 'BUNDLE',
       subscriptionId: 'b',
     });
@@ -4282,18 +4880,28 @@ describe('QuotaAllocator', () => {
     const bundles = [
       bundle('exhausted', { remaining: 0, createdAt: new Date('2026-09-20T00:00:00Z') }),
       bundle('expired', { endDate: now, createdAt: new Date('2026-09-19T00:00:00Z') }),
-      bundle('future', { startDate: new Date('2026-09-25T00:00:00Z'), createdAt: new Date('2026-09-18T00:00:00Z') }),
+      bundle('future', {
+        startDate: new Date('2026-09-25T00:00:00Z'),
+        createdAt: new Date('2026-09-18T00:00:00Z'),
+      }),
       bundle('ok', { createdAt: new Date('2026-09-02T00:00:00Z') }),
     ];
-    expect(allocator.allocate({ usage: usage(3), bundles, now })).toEqual({ source: 'BUNDLE', subscriptionId: 'ok' });
+    expect(allocator.allocate({ usage: usage(3), bundles, now })).toEqual({
+      source: 'BUNDLE',
+      subscriptionId: 'ok',
+    });
   });
 
   it('treats a null remaining (Enterprise) as unlimited', () => {
-    expect(allocator.allocate({ usage: usage(3), bundles: [bundle('ent', { remaining: null })], now })).toEqual({ source: 'BUNDLE', subscriptionId: 'ent' });
+    expect(
+      allocator.allocate({ usage: usage(3), bundles: [bundle('ent', { remaining: null })], now }),
+    ).toEqual({ source: 'BUNDLE', subscriptionId: 'ent' });
   });
 
   it('throws a typed QUOTA_EXHAUSTED error with reset details when nothing is available', () => {
-    expect(() => allocator.allocate({ usage: usage(3), bundles: [bundle('x', { remaining: 0 })], now })).toThrow(
+    expect(() =>
+      allocator.allocate({ usage: usage(3), bundles: [bundle('x', { remaining: 0 })], now }),
+    ).toThrow(
       expect.objectContaining({
         code: 'QUOTA_EXHAUSTED',
         details: { freeUsed: 3, freeLimit: 3, freeResetsAt: '2026-10-01T00:00:00.000Z', usableBundles: 0 },
@@ -4307,7 +4915,11 @@ describe('MonthlyUsage', () => {
     const u = MonthlyUsage.empty('u1', '2026-09', 3);
     u.consumeFree();
     u.recordBundleUse();
-    expect({ freeUsed: u.freeUsed, freeRemaining: u.freeRemaining, total: u.totalMessages }).toEqual({ freeUsed: 1, freeRemaining: 2, total: 2 });
+    expect({ freeUsed: u.freeUsed, freeRemaining: u.freeRemaining, total: u.totalMessages }).toEqual({
+      freeUsed: 1,
+      freeRemaining: 2,
+      total: 2,
+    });
   });
   it('refuses to consume beyond the free limit', () => {
     const u = usage(3);
@@ -4317,6 +4929,7 @@ describe('MonthlyUsage', () => {
 ```
 
 `test/unit/chat/chat-access.policy.spec.ts`:
+
 ```ts
 import { ChatAccessPolicy } from '../../../src/chat/domain/policies/chat-access.policy';
 
@@ -4337,6 +4950,7 @@ Expected: FAIL (modules not found).
 - [ ] **Step 3: Implement the chat domain**
 
 `src/chat/domain/ports.ts`:
+
 ```ts
 export interface BundleSnapshot {
   id: string;
@@ -4370,6 +4984,7 @@ export const AI_COMPLETION = Symbol('AI_COMPLETION');
 ```
 
 `src/chat/domain/services/usage-period.ts`:
+
 ```ts
 export class UsagePeriod {
   private constructor(
@@ -4391,6 +5006,7 @@ export class UsagePeriod {
 ```
 
 `src/chat/domain/entities/monthly-usage.ts`:
+
 ```ts
 import { DomainError } from '../../../shared/domain/errors';
 
@@ -4407,9 +5023,15 @@ export class MonthlyUsage {
     return new MonthlyUsage(userId, period, 0, freeLimit, 0);
   }
 
-  get freeUsed(): number { return this._freeUsed; }
-  get totalMessages(): number { return this._totalMessages; }
-  get freeRemaining(): number { return Math.max(0, this.freeLimit - this._freeUsed); }
+  get freeUsed(): number {
+    return this._freeUsed;
+  }
+  get totalMessages(): number {
+    return this._totalMessages;
+  }
+  get freeRemaining(): number {
+    return Math.max(0, this.freeLimit - this._freeUsed);
+  }
 
   hasFreeRemaining(): boolean {
     return this._freeUsed < this.freeLimit;
@@ -4428,6 +5050,7 @@ export class MonthlyUsage {
 ```
 
 `src/chat/domain/entities/chat-message.ts`:
+
 ```ts
 export type QuotaSource = 'FREE' | 'BUNDLE';
 
@@ -4450,25 +5073,31 @@ export interface ChatMessageRecord {
 ```
 
 `src/chat/domain/policies/bundle-selection.policy.ts`:
+
 ```ts
 import type { BundleSnapshot } from '../ports';
 
 /** Spec A1: "latest remaining quota" = the most recently created usable bundle (ties: id DESC). */
 export function selectBundle(usable: readonly BundleSnapshot[]): BundleSnapshot | undefined {
-  return [...usable].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))[0];
+  return [...usable].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+  )[0];
 }
 ```
 
 `src/chat/domain/policies/chat-access.policy.ts`:
+
 ```ts
 import { isAdmin, type Actor } from '../../../shared/domain/actor';
 
 export const ChatAccessPolicy = {
-  canListFor: (actor: Actor, targetUserId: string): boolean => isAdmin(actor) || targetUserId === actor.userId,
+  canListFor: (actor: Actor, targetUserId: string): boolean =>
+    isAdmin(actor) || targetUserId === actor.userId,
 };
 ```
 
 `src/chat/domain/services/quota-allocator.ts`:
+
 ```ts
 import { DomainError } from '../../../shared/domain/errors';
 import type { MonthlyUsage } from '../entities/monthly-usage';
@@ -4478,19 +5107,24 @@ import { UsagePeriod } from './usage-period';
 
 export type Allocation = { source: 'FREE' } | { source: 'BUNDLE'; subscriptionId: string };
 
-const isUsable = (b: BundleSnapshot, now: Date) => b.startDate <= now && now < b.endDate && (b.remaining === null || b.remaining > 0);
+const isUsable = (b: BundleSnapshot, now: Date) =>
+  b.startDate <= now && now < b.endDate && (b.remaining === null || b.remaining > 0);
 
 export class QuotaAllocator {
   allocate(input: { usage: MonthlyUsage; bundles: readonly BundleSnapshot[]; now: Date }): Allocation {
     if (input.usage.hasFreeRemaining()) return { source: 'FREE' };
     const chosen = selectBundle(input.bundles.filter((b) => isUsable(b, input.now)));
     if (!chosen) {
-      throw new DomainError('QUOTA_EXHAUSTED', 'Monthly free quota is used up and no active bundle has remaining messages', {
-        freeUsed: input.usage.freeUsed,
-        freeLimit: input.usage.freeLimit,
-        freeResetsAt: UsagePeriod.fromDate(input.now).resetsAt().toISOString(),
-        usableBundles: 0,
-      });
+      throw new DomainError(
+        'QUOTA_EXHAUSTED',
+        'Monthly free quota is used up and no active bundle has remaining messages',
+        {
+          freeUsed: input.usage.freeUsed,
+          freeLimit: input.usage.freeLimit,
+          freeResetsAt: UsagePeriod.fromDate(input.now).resetsAt().toISOString(),
+          usableBundles: 0,
+        },
+      );
     }
     return { source: 'BUNDLE', subscriptionId: chosen.id };
   }
@@ -4498,6 +5132,7 @@ export class QuotaAllocator {
 ```
 
 `src/chat/domain/services/token-estimator.ts`:
+
 ```ts
 /** Rough OpenAI-style estimate (~4 chars/token); used only by the mock. */
 export const estimateTokens = (text: string): number => Math.max(1, Math.ceil(text.length / 4));
@@ -4522,11 +5157,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 12: Chat API: ask a question with transactional quota deduction, list history
 
 **Files:**
+
 - Create: `src/chat/repositories/monthly-usage.repository.ts`, `src/chat/repositories/prisma-monthly-usage.repository.ts`, `src/chat/repositories/chat-message.repository.ts`, `src/chat/repositories/prisma-chat-message.repository.ts`, `src/chat/infrastructure/mock-openai.adapter.ts`, `src/subscriptions/infrastructure/bundle-quota.adapter.ts`, `src/chat/application/ask-question.use-case.ts`, `src/chat/application/list-chats.use-case.ts`, `src/chat/controllers/chat.controller.ts`, `src/chat/chat.module.ts`, `src/chat/index.ts`
 - Modify: `src/subscriptions/subscriptions.module.ts` (provide and export `BUNDLE_QUOTA`), `src/app.module.ts` (import `ChatModule`)
 - Test: `test/integration/chat/chat-api.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: the Task 11 domain, `SubscriptionRepository`, `TransactionRunner`, `Clock`, `APP_CONFIG`, `listQuerySchema`, `safeText`, `stripHtml`.
 - Produces:
   - `MonthlyUsageRepository { find(userId, period): Promise<MonthlyUsage|null>; lockOrCreate(userId, period, freeLimit): Promise<MonthlyUsage>; save(usage): Promise<void> }`, `MONTHLY_USAGE_REPOSITORY`
@@ -4539,6 +5176,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the repositories**
 
 `src/chat/repositories/monthly-usage.repository.ts`:
+
 ```ts
 import type { MonthlyUsage } from '../domain/entities/monthly-usage';
 
@@ -4552,6 +5190,7 @@ export const MONTHLY_USAGE_REPOSITORY = Symbol('MONTHLY_USAGE_REPOSITORY');
 ```
 
 `src/chat/repositories/prisma-monthly-usage.repository.ts`:
+
 ```ts
 import { Injectable } from '@nestjs/common';
 import { PrismaTransactionRunner } from '../../shared/prisma/prisma-transaction-runner';
@@ -4599,6 +5238,7 @@ export class PrismaMonthlyUsageRepository implements MonthlyUsageRepository {
 ```
 
 `src/chat/repositories/chat-message.repository.ts`:
+
 ```ts
 import type { ChatMessageRecord } from '../domain/entities/chat-message';
 
@@ -4610,6 +5250,7 @@ export const CHAT_MESSAGE_REPOSITORY = Symbol('CHAT_MESSAGE_REPOSITORY');
 ```
 
 `src/chat/repositories/prisma-chat-message.repository.ts`:
+
 ```ts
 import { Injectable } from '@nestjs/common';
 import { PrismaTransactionRunner } from '../../shared/prisma/prisma-transaction-runner';
@@ -4625,7 +5266,9 @@ export class PrismaChatMessageRepository implements ChatMessageRepository {
   }
 
   listByUser(userId: string, limit: number): Promise<ChatMessageRecord[]> {
-    return this.tx.db().chatMessage.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
+    return this.tx
+      .db()
+      .chatMessage.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
   }
 }
 ```
@@ -4633,6 +5276,7 @@ export class PrismaChatMessageRepository implements ChatMessageRepository {
 - [ ] **Step 2: Write the adapters (mock OpenAI, bundle quota)**
 
 `src/chat/infrastructure/mock-openai.adapter.ts`:
+
 ```ts
 import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
@@ -4673,7 +5317,11 @@ export class MockOpenAiAdapter implements AiCompletionPort {
       id: raw.id,
       model: raw.model,
       content,
-      usage: { promptTokens: raw.usage.prompt_tokens, completionTokens: raw.usage.completion_tokens, totalTokens: raw.usage.total_tokens },
+      usage: {
+        promptTokens: raw.usage.prompt_tokens,
+        completionTokens: raw.usage.completion_tokens,
+        totalTokens: raw.usage.total_tokens,
+      },
       latencyMs: Date.now() - started,
     };
   }
@@ -4696,12 +5344,16 @@ export class MockOpenAiAdapter implements AiCompletionPort {
 ```
 
 `src/subscriptions/infrastructure/bundle-quota.adapter.ts`:
+
 ```ts
 import { Inject, Injectable } from '@nestjs/common';
 import type { BundleQuotaPort, BundleSnapshot } from '../../chat/domain/ports';
 import { DomainError } from '../../shared/domain/errors';
 import type { Subscription } from '../domain/entities/subscription';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 const toSnapshot = (s: Subscription): BundleSnapshot => ({
   id: s.id,
@@ -4734,6 +5386,7 @@ export class BundleQuotaAdapter implements BundleQuotaPort {
 ```
 
 In `subscriptions.module.ts`:
+
 - add `import { BUNDLE_QUOTA } from '../chat/domain/ports';` and `import { BundleQuotaAdapter } from './infrastructure/bundle-quota.adapter';`
 - add `{ provide: BUNDLE_QUOTA, useClass: BundleQuotaAdapter }` to `providers`
 - add `BUNDLE_QUOTA` to `exports`
@@ -4741,6 +5394,7 @@ In `subscriptions.module.ts`:
 - [ ] **Step 3: Write the use cases, controller and module**
 
 `src/chat/application/ask-question.use-case.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
@@ -4755,7 +5409,10 @@ import { AI_COMPLETION, BUNDLE_QUOTA, type AiCompletionPort, type BundleQuotaPor
 import { QuotaAllocator } from '../domain/services/quota-allocator';
 import { UsagePeriod } from '../domain/services/usage-period';
 import { CHAT_MESSAGE_REPOSITORY, type ChatMessageRepository } from '../repositories/chat-message.repository';
-import { MONTHLY_USAGE_REPOSITORY, type MonthlyUsageRepository } from '../repositories/monthly-usage.repository';
+import {
+  MONTHLY_USAGE_REPOSITORY,
+  type MonthlyUsageRepository,
+} from '../repositories/monthly-usage.repository';
 
 export interface AskResult {
   message: ChatMessageRecord;
@@ -4776,7 +5433,12 @@ export class AskQuestionUseCase {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  async execute(input: { actor: Actor; question: string; requestId: string; isCancelled: () => boolean }): Promise<AskResult> {
+  async execute(input: {
+    actor: Actor;
+    question: string;
+    requestId: string;
+    isCancelled: () => boolean;
+  }): Promise<AskResult> {
     const userId = input.actor.userId;
     const freeLimit = this.config.FREE_MESSAGES_PER_MONTH;
 
@@ -4785,7 +5447,11 @@ export class AskQuestionUseCase {
     const period = UsagePeriod.fromDate(checkNow).value;
     const snapshot = (await this.usage.find(userId, period)) ?? MonthlyUsage.empty(userId, period, freeLimit);
     if (!snapshot.hasFreeRemaining()) {
-      this.allocator.allocate({ usage: snapshot, bundles: await this.bundles.peekUsableBundles(userId, checkNow), now: checkNow });
+      this.allocator.allocate({
+        usage: snapshot,
+        bundles: await this.bundles.peekUsableBundles(userId, checkNow),
+        now: checkNow,
+      });
     }
 
     // 2. Mock AI call: outside any transaction, no locks held.
@@ -4825,7 +5491,12 @@ export class AskQuestionUseCase {
       await this.messages.create(message);
       return {
         message,
-        quota: { source: allocation.source, subscriptionId: message.subscriptionId, freeRemaining: usage.freeRemaining, freeResetsAt: p.resetsAt() },
+        quota: {
+          source: allocation.source,
+          subscriptionId: message.subscriptionId,
+          freeRemaining: usage.freeRemaining,
+          freeResetsAt: p.resetsAt(),
+        },
       };
     });
   }
@@ -4833,6 +5504,7 @@ export class AskQuestionUseCase {
 ```
 
 `src/chat/application/list-chats.use-case.ts`:
+
 ```ts
 import { Inject, Injectable } from '@nestjs/common';
 import type { Actor } from '../../shared/domain/actor';
@@ -4847,13 +5519,15 @@ export class ListChatsUseCase {
 
   execute(actor: Actor, query: { userId?: string | undefined; limit: number }): Promise<ChatMessageRecord[]> {
     const target = query.userId ?? actor.userId;
-    if (!ChatAccessPolicy.canListFor(actor, target)) throw new DomainError('FORBIDDEN', 'Cannot list another user’s chats');
+    if (!ChatAccessPolicy.canListFor(actor, target))
+      throw new DomainError('FORBIDDEN', 'Cannot list another user’s chats');
     return this.messages.listByUser(target, query.limit);
   }
 }
 ```
 
 `src/chat/controllers/chat.controller.ts`:
+
 ```ts
 import { Body, Controller, Get, HttpCode, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
@@ -4879,7 +5553,11 @@ export class ChatController {
 
   @Post('messages')
   @HttpCode(201)
-  async ask(@CurrentActor() actor: Actor, @Req() req: Request, @Body(new ZodValidationPipe(askSchema)) body: z.infer<typeof askSchema>) {
+  async ask(
+    @CurrentActor() actor: Actor,
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(askSchema)) body: z.infer<typeof askSchema>,
+  ) {
     const { message: m, quota } = await this.askUc.execute({
       actor,
       question: body.question,
@@ -4891,7 +5569,11 @@ export class ChatController {
       question: m.question,
       answer: m.answer,
       model: m.model,
-      usage: { promptTokens: m.promptTokens, completionTokens: m.completionTokens, totalTokens: m.totalTokens },
+      usage: {
+        promptTokens: m.promptTokens,
+        completionTokens: m.completionTokens,
+        totalTokens: m.totalTokens,
+      },
       quota,
       createdAt: m.createdAt,
     };
@@ -4905,6 +5587,7 @@ export class ChatController {
 ```
 
 `src/chat/chat.module.ts`:
+
 ```ts
 import { Module } from '@nestjs/common';
 import { SubscriptionsModule } from '../subscriptions';
@@ -4933,6 +5616,7 @@ export class ChatModule {}
 ```
 
 `src/chat/index.ts`:
+
 ```ts
 export { ChatModule } from './chat.module';
 export { UsagePeriod } from './domain/services/usage-period';
@@ -4943,6 +5627,7 @@ Add `ChatModule` to `AppModule.imports`.
 - [ ] **Step 4: Write the failing chat integration test**
 
 `test/integration/chat/chat-api.int-spec.ts`:
+
 ```ts
 import request from 'supertest';
 import { closeTestApp, createTestApp, resetState, type TestContext } from '../../support/test-app';
@@ -4975,32 +5660,63 @@ describe('Chat API', () => {
     });
     expect(res.body.usage.totalTokens).toBe(res.body.usage.promptTokens + res.body.usage.completionTokens);
     const row = await ctx.prisma.chatMessage.findUniqueOrThrow({ where: { id: res.body.id } });
-    expect(row).toMatchObject({ userId: user.userId, question: 'How do transactions work?', answer: res.body.answer, requestId: res.headers['x-request-id'] });
+    expect(row).toMatchObject({
+      userId: user.userId,
+      question: 'How do transactions work?',
+      answer: res.body.answer,
+      requestId: res.headers['x-request-id'],
+    });
   });
 
   it('gives 3 free messages then a typed 402 QUOTA_EXHAUSTED', async () => {
     await exhaustFree(user);
     const res = await ask(user);
     expect(res.status).toBe(402);
-    expect(res.body.error).toMatchObject({ code: 'QUOTA_EXHAUSTED', details: { freeUsed: 3, freeLimit: 3, usableBundles: 0 } });
+    expect(res.body.error).toMatchObject({
+      code: 'QUOTA_EXHAUSTED',
+      details: { freeUsed: 3, freeLimit: 3, usableBundles: 0 },
+    });
   });
 
   it('charges the newest bundle after free quota', async () => {
-    const older = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
-    const newer = await user.post('/v1/subscriptions', { tier: 'PRO', billingCycle: 'MONTHLY', autoRenew: true });
+    const older = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
+    const newer = await user.post('/v1/subscriptions', {
+      tier: 'PRO',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     await exhaustFree(user);
     const res = await ask(user);
     expect(res.status).toBe(201);
     expect(res.body.quota).toMatchObject({ source: 'BUNDLE', subscriptionId: newer.body.id });
-    expect((await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: newer.body.id } })).usedMessages).toBe(1);
-    expect((await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: older.body.id } })).usedMessages).toBe(0);
+    expect(
+      (await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: newer.body.id } })).usedMessages,
+    ).toBe(1);
+    expect(
+      (await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: older.body.id } })).usedMessages,
+    ).toBe(0);
   });
 
   it('never charges a cancelled or expired bundle (Review Focus #3)', async () => {
-    const cancelled = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const cancelled = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     await user.post(`/v1/subscriptions/${cancelled.body.id}/cancel`);
-    const expired = await user.post('/v1/subscriptions', { tier: 'PRO', billingCycle: 'MONTHLY', autoRenew: true });
-    await ctx.prisma.subscription.update({ where: { id: expired.body.id }, data: { endDate: new Date(Date.now() - 1000) } });
+    const expired = await user.post('/v1/subscriptions', {
+      tier: 'PRO',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
+    await ctx.prisma.subscription.update({
+      where: { id: expired.body.id },
+      data: { endDate: new Date(Date.now() - 1000) },
+    });
     await exhaustFree(user);
     const res = await ask(user);
     expect(res.status).toBe(402);
@@ -5018,11 +5734,17 @@ describe('Chat API', () => {
   });
 
   it('never over-draws a bundle under concurrency', async () => {
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     await exhaustFree(user);
     const results = await Promise.all(Array.from({ length: 15 }, (_, i) => ask(user, `drain ${i}`)));
     expect(results.filter((r) => r.status === 201)).toHaveLength(10);
-    expect((await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: sub.body.id } })).usedMessages).toBe(10);
+    expect(
+      (await ctx.prisma.subscription.findUniqueOrThrow({ where: { id: sub.body.id } })).usedMessages,
+    ).toBe(10);
   });
 
   it('sanitises markup, rejects markup-only questions and keeps emoji (Review Focus #1)', async () => {
@@ -5063,6 +5785,7 @@ describe('Chat API', () => {
 
 Run: `npx jest -c jest.int.config.js test/integration/chat`
 Expected: PASS (9 tests).
+
 - If the concurrency test gets more than 3 × 201, the lock is not held: check that `lockOrCreate` runs inside `tx.run` (inspect `this.tx.db() !== prisma`).
 - If it deadlocks or times out, check that `lockUsableBundles` orders by `id`.
 
@@ -5080,11 +5803,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 13: Observability: health, metrics, structured logs
 
 **Files:**
+
 - Create: `src/observability/health.controller.ts`, `src/observability/metrics.query.ts`, `src/observability/get-metrics.use-case.ts`, `src/observability/metrics.controller.ts`, `src/observability/observability.module.ts`
 - Modify: `src/app.module.ts` (import `ObservabilityModule`)
 - Test: `test/integration/observability/observability.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: `PrismaService`, `RedisService`, `assertAdmin`, `UsagePeriod` (from `src/chat/index.ts`), `HealthProbe`, `Roles`, `RateLimitGroup`, `CurrentActor`.
 - Produces:
   - `GET /health` returns 200 `{ status: 'ok', checks: { database: 'up', redis: 'up' } }`, or 503 with `status: 'degraded'`.
@@ -5093,6 +5818,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the failing observability test**
 
 `test/integration/observability/observability.int-spec.ts`:
+
 ```ts
 import { Writable } from 'node:stream';
 import request from 'supertest';
@@ -5104,7 +5830,8 @@ describe('Observability', () => {
   const lines: Record<string, unknown>[] = [];
   const logStream = new Writable({
     write(chunk: Buffer, _enc, cb) {
-      for (const l of chunk.toString().split('\n').filter(Boolean)) lines.push(JSON.parse(l) as Record<string, unknown>);
+      for (const l of chunk.toString().split('\n').filter(Boolean))
+        lines.push(JSON.parse(l) as Record<string, unknown>);
       cb();
     },
   });
@@ -5117,7 +5844,9 @@ describe('Observability', () => {
 
   it('protects /health with the probe token', async () => {
     expect((await request(ctx.http).get('/health')).status).toBe(401);
-    expect((await request(ctx.http).get('/health').set('X-Health-Token', 'wrong-token-wrong-token')).status).toBe(401);
+    expect(
+      (await request(ctx.http).get('/health').set('X-Health-Token', 'wrong-token-wrong-token')).status,
+    ).toBe(401);
     const ok = await request(ctx.http).get('/health').set('X-Health-Token', ctx.config.HEALTH_CHECK_TOKEN);
     expect(ok.status).toBe(200);
     expect(ok.body).toEqual({ status: 'ok', checks: { database: 'up', redis: 'up' } });
@@ -5134,7 +5863,10 @@ describe('Observability', () => {
     expect(res.body).toMatchObject({
       users: 2,
       chat: { messages: 1, free: 1, bundle: 0 },
-      subscriptions: { activeByTier: { BASIC: 0, PRO: 1, ENTERPRISE: 0 }, inactiveByReason: { CANCELLED: 0, PAYMENT_FAILED: 0, EXPIRED: 0 } },
+      subscriptions: {
+        activeByTier: { BASIC: 0, PRO: 1, ENTERPRISE: 0 },
+        inactiveByReason: { CANCELLED: 0, PAYMENT_FAILED: 0, EXPIRED: 0 },
+      },
     });
     expect(res.body.chat.tokens).toBeGreaterThan(0);
   });
@@ -5145,7 +5877,12 @@ describe('Observability', () => {
     const res = await user.get('/v1/auth/me');
     await new Promise((r) => setImmediate(r));
     const entry = lines.find((l) => l.path === '/v1/auth/me');
-    expect(entry).toMatchObject({ requestId: res.headers['x-request-id'], userId: user.userId, statusCode: 200, method: 'GET' });
+    expect(entry).toMatchObject({
+      requestId: res.headers['x-request-id'],
+      userId: user.userId,
+      statusCode: 200,
+      method: 'GET',
+    });
     expect(typeof entry?.responseTimeMs).toBe('number');
     expect(JSON.stringify(lines)).not.toContain(user.token);
   });
@@ -5160,6 +5897,7 @@ Expected: FAIL (404 on `/health`).
 - [ ] **Step 3: Implement health and metrics**
 
 `src/observability/health.controller.ts`:
+
 ```ts
 import { Controller, Get, Res } from '@nestjs/common';
 import type { Response } from 'express';
@@ -5179,8 +5917,14 @@ export class HealthController {
   @Get()
   async check(@Res({ passthrough: true }) res: Response) {
     const [database, redis] = await Promise.all([
-      this.prisma.$queryRaw`SELECT 1`.then(() => 'up' as const, () => 'down' as const),
-      this.redis.client.ping().then(() => 'up' as const, () => 'down' as const),
+      this.prisma.$queryRaw`SELECT 1`.then(
+        () => 'up' as const,
+        () => 'down' as const,
+      ),
+      this.redis.client.ping().then(
+        () => 'up' as const,
+        () => 'down' as const,
+      ),
     ]);
     const healthy = database === 'up' && redis === 'up';
     res.status(healthy ? 200 : 503);
@@ -5192,6 +5936,7 @@ export class HealthController {
 Note: `IpRateLimitGuard` uses Redis. If Redis is down, `/health` returns 503 `SERVICE_UNAVAILABLE` from the guard, which is still a correct "unhealthy" signal.
 
 `src/observability/metrics.query.ts`:
+
 ```ts
 import { Injectable } from '@nestjs/common';
 import { UsagePeriod } from '../chat';
@@ -5214,9 +5959,18 @@ export class MetricsQuery {
     const period = UsagePeriod.fromDate(now).value;
     const [users, chat, active, inactive] = await Promise.all([
       this.prisma.user.count(),
-      this.prisma.chatMessage.groupBy({ by: ['quotaSource'], where: { period }, _count: { _all: true }, _sum: { totalTokens: true } }),
+      this.prisma.chatMessage.groupBy({
+        by: ['quotaSource'],
+        where: { period },
+        _count: { _all: true },
+        _sum: { totalTokens: true },
+      }),
       this.prisma.subscription.groupBy({ by: ['tier'], where: { status: 'ACTIVE' }, _count: { _all: true } }),
-      this.prisma.subscription.groupBy({ by: ['inactiveReason'], where: { status: 'INACTIVE' }, _count: { _all: true } }),
+      this.prisma.subscription.groupBy({
+        by: ['inactiveReason'],
+        where: { status: 'INACTIVE' },
+        _count: { _all: true },
+      }),
     ]);
     const bySource = (s: 'FREE' | 'BUNDLE') => chat.find((c) => c.quotaSource === s);
     const activeByTier = { BASIC: 0, PRO: 0, ENTERPRISE: 0 };
@@ -5227,7 +5981,13 @@ export class MetricsQuery {
     const bundle = bySource('BUNDLE')?._count._all ?? 0;
     return {
       users,
-      chat: { period, messages: free + bundle, free, bundle, tokens: chat.reduce((n, c) => n + (c._sum.totalTokens ?? 0), 0) },
+      chat: {
+        period,
+        messages: free + bundle,
+        free,
+        bundle,
+        tokens: chat.reduce((n, c) => n + (c._sum.totalTokens ?? 0), 0),
+      },
       subscriptions: { activeByTier, inactiveByReason },
     };
   }
@@ -5235,6 +5995,7 @@ export class MetricsQuery {
 ```
 
 `src/observability/get-metrics.use-case.ts`:
+
 ```ts
 import { Inject, Injectable } from '@nestjs/common';
 import type { Actor } from '../shared/domain/actor';
@@ -5257,6 +6018,7 @@ export class GetMetricsUseCase {
 ```
 
 `src/observability/metrics.controller.ts`:
+
 ```ts
 import { Controller, Get } from '@nestjs/common';
 import type { Actor } from '../shared/domain/actor';
@@ -5277,6 +6039,7 @@ export class MetricsController {
 ```
 
 `src/observability/observability.module.ts`:
+
 ```ts
 import { Module } from '@nestjs/common';
 import { GetMetricsUseCase } from './get-metrics.use-case';
@@ -5309,15 +6072,18 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 14: Cross-cutting security integration: default deny, rate limits, timeout behaviour
 
 **Files:**
+
 - Test: `test/integration/security/default-deny.int-spec.ts`, `test/integration/security/rate-limit.int-spec.ts`, `test/integration/security/timeout.int-spec.ts`
 
 **Interfaces:**
+
 - Consumes: `createTestApp`, `TestClient`, and all routes.
 - Produces: no new code, unless a test exposes a bug. Fix bugs in the owning file.
 
 - [ ] **Step 1: Write the default-deny test (enumerates every registered route)**
 
 `test/integration/security/default-deny.int-spec.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
@@ -5338,7 +6104,12 @@ describe('Default deny: no open or bypassable endpoints', () => {
     const instance = ctx.app.getHttpAdapter().getInstance() as { router: { stack: Layer[] } };
     return instance.router.stack
       .filter((l): l is Required<Layer> => l.route !== undefined)
-      .flatMap((l) => Object.keys(l.route.methods).map((m) => ({ method: m, path: l.route.path.replace(':id', randomUUID()) })));
+      .flatMap((l) =>
+        Object.keys(l.route.methods).map((m) => ({
+          method: m,
+          path: l.route.path.replace(':id', randomUUID()),
+        })),
+      );
   }
 
   it('discovers all application routes', () => {
@@ -5347,25 +6118,37 @@ describe('Default deny: no open or bypassable endpoints', () => {
 
   it('rejects every route without credentials with 401', async () => {
     for (const { method, path } of routes()) {
-      const res = await (request(ctx.http) as unknown as Record<string, (p: string) => request.Test>)[method]!(path);
+      const res = await (request(ctx.http) as unknown as Record<string, (p: string) => request.Test>)[
+        method
+      ]!(path);
       expect({ method, path, status: res.status }).toEqual({ method, path, status: 401 });
     }
   });
 
   it('rejects every signed route when only a bearer token is presented', async () => {
     const token = await ctx.idp.token();
-    for (const { method, path } of routes().filter((r) => r.path !== '/v1/auth/device-keys' && r.path !== '/health')) {
-      const res = await (request(ctx.http) as unknown as Record<string, (p: string) => request.Test>)[method]!(path).set('Authorization', `Bearer ${token}`);
-      expect({ method, path, code: res.body?.error?.code }).toEqual({ method, path, code: 'SIGNATURE_REQUIRED' });
+    for (const { method, path } of routes().filter(
+      (r) => r.path !== '/v1/auth/device-keys' && r.path !== '/health',
+    )) {
+      const res = await (request(ctx.http) as unknown as Record<string, (p: string) => request.Test>)[
+        method
+      ]!(path).set('Authorization', `Bearer ${token}`);
+      expect({ method, path, code: res.body?.error?.code }).toEqual({
+        method,
+        path,
+        code: 'SIGNATURE_REQUIRED',
+      });
     }
   });
 });
 ```
+
 If Express 5 doesn't expose `router.stack` on the instance, use `instance._router.stack` (Express 4 naming) as the fallback in `routes()`.
 
 - [ ] **Step 2: Write the rate-limit test**
 
 `test/integration/security/rate-limit.int-spec.ts`:
+
 ```ts
 import request from 'supertest';
 import { closeTestApp, createTestApp, resetState, type TestContext } from '../../support/test-app';
@@ -5392,7 +6175,8 @@ describe('Rate limiting', () => {
   });
 
   it('limits the auth group per IP (20/min) before any token verification', async () => {
-    for (let i = 0; i < 20; i++) expect((await request(ctx.http).post('/v1/auth/device-keys')).status).toBe(401);
+    for (let i = 0; i < 20; i++)
+      expect((await request(ctx.http).post('/v1/auth/device-keys')).status).toBe(401);
     const limited = await request(ctx.http).post('/v1/auth/device-keys');
     expect(limited.status).toBe(429);
     expect(limited.headers['retry-after']).toBeDefined();
@@ -5410,6 +6194,7 @@ describe('Rate limiting', () => {
 - [ ] **Step 3: Write the timeout-not-charged test**
 
 `test/integration/security/timeout.int-spec.ts`:
+
 ```ts
 import { closeTestApp, createTestApp, resetState, type TestContext } from '../../support/test-app';
 import { TestClient } from '../../support/test-client';
@@ -5417,7 +6202,9 @@ import { TestClient } from '../../support/test-client';
 describe('Global timeout on a real route', () => {
   let ctx: TestContext;
   beforeAll(async () => {
-    ctx = await createTestApp({ env: { REQUEST_TIMEOUT_MS: '200', AI_MOCK_MIN_LATENCY_MS: '600', AI_MOCK_MAX_LATENCY_MS: '600' } });
+    ctx = await createTestApp({
+      env: { REQUEST_TIMEOUT_MS: '200', AI_MOCK_MIN_LATENCY_MS: '600', AI_MOCK_MAX_LATENCY_MS: '600' },
+    });
   });
   beforeEach(() => resetState(ctx));
   afterAll(() => closeTestApp(ctx));
@@ -5439,6 +6226,7 @@ describe('Global timeout on a real route', () => {
 
 Run: `npx jest -c jest.int.config.js test/integration/security`
 Expected: PASS. Likely fixes:
+
 - The per-user auth test counts the registration hit. With 10 `/auth/me` calls, the 10th is the 11th auth-group hit for that user, so it returns 429. If it's off by one, check the `perUser` value in `RATE_LIMITS.auth` rather than the test.
 - If a route appears in default-deny with status 404, its controller is missing from a module.
 
@@ -5456,9 +6244,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 15: CLI scripts (signed client, promote admin)
 
 **Files:**
+
 - Create: `scripts/client.ts`, `scripts/promote-admin.ts`
 
 **Interfaces:**
+
 - Consumes: `signRequest` (`scripts/lib/signer.ts`), `@supabase/supabase-js`, `@prisma/client`.
 - Produces:
   - `npm run client -- <command>` with commands: `signup <email> <password>`, `login <email> <password>`, `login-token <accessToken>`, `me`, `ask "<question>"`, `chats`, `subscribe <TIER> <MONTHLY|YEARLY> [autoRenew=true]`, `subs`, `auto-renew <id> <true|false>`, `cancel <id>`, `metrics`, `billing-run`
@@ -5467,6 +6257,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the client**
 
 `scripts/client.ts`:
+
 ```ts
 import { createPrivateKey, generateKeyPairSync } from 'node:crypto';
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -5498,17 +6289,27 @@ async function bind(accessToken: string): Promise<void> {
   });
   console.log(res.status, await res.text());
   if (!res.ok) process.exit(1);
-  const session: Session = { accessToken, privateKeyPem: privateKey.export({ format: 'pem', type: 'pkcs8' }).toString() };
+  const session: Session = {
+    accessToken,
+    privateKeyPem: privateKey.export({ format: 'pem', type: 'pkcs8' }).toString(),
+  };
   writeFileSync(SESSION_FILE, JSON.stringify(session));
   chmodSync(SESSION_FILE, 0o600);
   console.log(`Key bound. Session saved to ${SESSION_FILE}`);
 }
 
 async function call(method: string, path: string, body?: unknown): Promise<void> {
-  if (!existsSync(SESSION_FILE)) throw new Error('Not logged in: run `npm run client -- login <email> <password>`');
+  if (!existsSync(SESSION_FILE))
+    throw new Error('Not logged in: run `npm run client -- login <email> <password>`');
   const s = JSON.parse(readFileSync(SESSION_FILE, 'utf8')) as Session;
   const rawBody = body === undefined ? '' : JSON.stringify(body);
-  const headers = signRequest({ method, url: path, rawBody, token: s.accessToken, privateKey: createPrivateKey(s.privateKeyPem) });
+  const headers = signRequest({
+    method,
+    url: path,
+    rawBody,
+    token: s.accessToken,
+    privateKey: createPrivateKey(s.privateKeyPem),
+  });
   const res = await fetch(`${API}${path}`, {
     method,
     headers: body === undefined ? headers : { ...headers, 'Content-Type': 'application/json' },
@@ -5520,15 +6321,23 @@ async function call(method: string, path: string, body?: unknown): Promise<void>
 
 async function main(): Promise<void> {
   const [cmd, ...args] = process.argv.slice(2);
-  const supabase = () => createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), { auth: { persistSession: false } });
+  const supabase = () =>
+    createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), { auth: { persistSession: false } });
   switch (cmd) {
     case 'signup': {
       const { error } = await supabase().auth.signUp({ email: args[0] ?? '', password: args[1] ?? '' });
-      console.log(error ? `Error: ${error.message}` : 'Signed up. Confirm your email if confirmation is enabled, then log in.');
+      console.log(
+        error
+          ? `Error: ${error.message}`
+          : 'Signed up. Confirm your email if confirmation is enabled, then log in.',
+      );
       return;
     }
     case 'login': {
-      const { data, error } = await supabase().auth.signInWithPassword({ email: args[0] ?? '', password: args[1] ?? '' });
+      const { data, error } = await supabase().auth.signInWithPassword({
+        email: args[0] ?? '',
+        password: args[1] ?? '',
+      });
       if (error || !data.session) throw new Error(error?.message ?? 'no session');
       return bind(data.session.access_token);
     }
@@ -5541,7 +6350,11 @@ async function main(): Promise<void> {
     case 'chats':
       return call('GET', '/v1/chat/messages');
     case 'subscribe':
-      return call('POST', '/v1/subscriptions', { tier: args[0], billingCycle: args[1], autoRenew: (args[2] ?? 'true') === 'true' });
+      return call('POST', '/v1/subscriptions', {
+        tier: args[0],
+        billingCycle: args[1],
+        autoRenew: (args[2] ?? 'true') === 'true',
+      });
     case 'subs':
       return call('GET', '/v1/subscriptions');
     case 'auto-renew':
@@ -5553,7 +6366,9 @@ async function main(): Promise<void> {
     case 'billing-run':
       return call('POST', '/v1/admin/billing/run');
     default:
-      console.log('Commands: signup|login <email> <pw> · login-token <jwt> · me · ask <q> · chats · subscribe <TIER> <CYCLE> [autoRenew] · subs · auto-renew <id> <bool> · cancel <id> · metrics · billing-run');
+      console.log(
+        'Commands: signup|login <email> <pw> · login-token <jwt> · me · ask <q> · chats · subscribe <TIER> <CYCLE> [autoRenew] · subs · auto-renew <id> <bool> · cancel <id> · metrics · billing-run',
+      );
   }
 }
 
@@ -5564,6 +6379,7 @@ main().catch((e: unknown) => {
 ```
 
 `scripts/promote-admin.ts`:
+
 ```ts
 import { existsSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
@@ -5575,7 +6391,11 @@ async function main(): Promise<void> {
   if (!email) throw new Error('usage: npm run promote-admin -- <email>');
   const prisma = new PrismaClient();
   const { count } = await prisma.user.updateMany({ where: { email }, data: { role: 'ADMIN' } });
-  console.log(count > 0 ? `Promoted ${email} to ADMIN` : `No user with email ${email} (they must bind a key once first)`);
+  console.log(
+    count > 0
+      ? `Promoted ${email} to ADMIN`
+      : `No user with email ${email} (they must bind a key once first)`,
+  );
   await prisma.$disconnect();
 }
 
@@ -5593,6 +6413,7 @@ git add -A && git commit -m "feat: add signed CLI client and admin promotion scr
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
 These scripts are exercised manually in Task 16. Their signing core is already covered by the integration tests, which use the same `signRequest`.
 
 ---
@@ -5602,6 +6423,7 @@ These scripts are exercised manually in Task 16. Their signing core is already c
 **Prerequisite, done by the user:** run `supabase login` in their own terminal on this machine (`~/.local/bin/supabase login`). The token lands in `~/.supabase/access-token`. Agents must not try to drive the interactive login.
 
 **Files:**
+
 - Modify: `.env` (local only, never committed)
 
 - [ ] **Step 1: Create the project**
@@ -5619,26 +6441,31 @@ supabase projects api-keys --project-ref <REF> --agent no -o json   # note the a
 ```bash
 curl -s https://<REF>.supabase.co/auth/v1/.well-known/jwks.json
 ```
+
 Expected: `{"keys":[{"kty":"EC",...,"alg":"ES256"}]}` (or RSA). If `keys` is empty, the project still uses the legacy HS256 secret. Ask the user to open Dashboard → Project Settings → JWT Keys and migrate to (and rotate onto) asymmetric signing keys, then re-check.
 
 - [ ] **Step 3: Configure auth (email/password on, GitHub OAuth on, auto-confirm for the demo)**
 
 The user creates a GitHub OAuth App at https://github.com/settings/applications/new with:
+
 - Homepage: `https://<REF>.supabase.co`
 - Callback: `https://<REF>.supabase.co/auth/v1/callback`
 
 They then supply the client ID and secret. Apply them:
+
 ```bash
 curl -s -X PATCH "https://api.supabase.com/v1/projects/<REF>/config/auth" \
   -H "Authorization: Bearer $(cat ~/.supabase/access-token)" -H "Content-Type: application/json" \
   -d '{"external_email_enabled":true,"mailer_autoconfirm":true,"external_github_enabled":true,
        "external_github_client_id":"<GITHUB_CLIENT_ID>","external_github_secret":"<GITHUB_CLIENT_SECRET>"}'
 ```
+
 Expected: JSON echoing the auth config with `external_github_enabled: true`.
 
 - [ ] **Step 4: Fill `.env` and run the whole flow**
 
 Set `SUPABASE_URL=https://<REF>.supabase.co`, `SUPABASE_ANON_KEY=<anon>` and `HEALTH_CHECK_TOKEN=$(openssl rand -hex 24)` in `.env`. Then:
+
 ```bash
 npm run db:migrate && npm run build && (npm start &) && sleep 3
 npm run client -- signup demo@example.com 'Str0ng-Passw0rd!'
@@ -5651,6 +6478,7 @@ npm run promote-admin -- demo@example.com
 npm run client -- metrics
 curl -s localhost:3000/health -H "X-Health-Token: $HEALTH_CHECK_TOKEN"
 ```
+
 Expected: each command prints the documented status. Stop the server afterwards.
 
 ---
@@ -5658,11 +6486,13 @@ Expected: each command prints the documented status. Stop the server afterwards.
 ### Task 17: README, CI, final verification, push
 
 **Files:**
+
 - Create: `README.md`, `.github/workflows/ci.yml`
 
 - [ ] **Step 1: Write the CI workflow**
 
 `.github/workflows/ci.yml`:
+
 ```yaml
 name: ci
 on: [push, pull_request]
@@ -5695,6 +6525,7 @@ jobs:
 - [ ] **Step 2: Write the README**
 
 `README.md` must contain these sections. Copy tables and protocol text **verbatim from the spec** (§2 decisions, §3 interpretations, §4 architecture, §7 API, §8 flows, §9 security model and residual risks, §14 cut list) rather than paraphrasing them. The spec is the source of truth, and copying keeps the two consistent:
+
 1. **Overview.** What the service does, and the list of 11 endpoints (table from spec §7).
 2. **Architecture decisions.**
    - Layer diagram (spec §4.1) and module layout.
@@ -5722,6 +6553,7 @@ jobs:
 ```bash
 npm run format:check && npm run lint && npm run typecheck && npm test && npm run build
 ```
+
 Expected: all green. Paste the final test summary into the commit message body.
 
 - [ ] **Step 4: Commit and push**
@@ -5733,4 +6565,5 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 git push origin main
 gh run watch --exit-status || gh run list --limit 1
 ```
+
 Expected: the CI run on GitHub passes. The repository `axcel342/momin-imran-qureshi` is public and contains the PDF.

@@ -11,7 +11,8 @@ export class ListChatsUseCase {
 
   execute(actor: Actor, query: { userId?: string | undefined; limit: number }): Promise<ChatMessageRecord[]> {
     const target = query.userId ?? actor.userId;
-    if (!ChatAccessPolicy.canListFor(actor, target)) throw new DomainError('FORBIDDEN', 'Cannot list another user’s chats');
+    if (!ChatAccessPolicy.canListFor(actor, target))
+      throw new DomainError('FORBIDDEN', 'Cannot list another user’s chats');
     return this.messages.listByUser(target, query.limit);
   }
 }

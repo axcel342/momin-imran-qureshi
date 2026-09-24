@@ -5,7 +5,11 @@ import { PrismaTransactionRunner } from './prisma-transaction-runner';
 
 @Global()
 @Module({
-  providers: [PrismaService, PrismaTransactionRunner, { provide: TRANSACTION_RUNNER, useExisting: PrismaTransactionRunner }],
+  providers: [
+    PrismaService,
+    PrismaTransactionRunner,
+    { provide: TRANSACTION_RUNNER, useExisting: PrismaTransactionRunner },
+  ],
   exports: [PrismaService, PrismaTransactionRunner, TRANSACTION_RUNNER],
 })
 export class PrismaModule {}

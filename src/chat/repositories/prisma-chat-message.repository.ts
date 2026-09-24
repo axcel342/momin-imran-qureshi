@@ -12,6 +12,8 @@ export class PrismaChatMessageRepository implements ChatMessageRepository {
   }
 
   listByUser(userId: string, limit: number): Promise<ChatMessageRecord[]> {
-    return this.tx.db().chatMessage.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
+    return this.tx
+      .db()
+      .chatMessage.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
   }
 }

@@ -5,7 +5,10 @@ import { CLOCK, type Clock } from '../../shared/domain/clock';
 import { DomainError } from '../../shared/domain/errors';
 import { KeyBindingPolicy } from '../domain/policies/key-binding.policy';
 import { KEY_CRYPTO, type KeyCrypto, type PublicJwk, type VerifiedToken } from '../domain/ports';
-import { DEVICE_BINDING_REPOSITORY, type DeviceBindingRepository } from '../repositories/device-binding.repository';
+import {
+  DEVICE_BINDING_REPOSITORY,
+  type DeviceBindingRepository,
+} from '../repositories/device-binding.repository';
 import { USER_REPOSITORY, type UserRepository } from '../repositories/user.repository';
 
 @Injectable()
@@ -30,7 +33,13 @@ export class RegisterDeviceKeyUseCase {
     const bindingId = randomUUID();
     await this.tx.run(async () => {
       await this.users.upsert({ id: token.userId, email: token.email });
-      await this.bindings.create({ id: bindingId, userId: token.userId, sessionId: token.sessionId, publicKeyJwk: publicKey, createdAt: now });
+      await this.bindings.create({
+        id: bindingId,
+        userId: token.userId,
+        sessionId: token.sessionId,
+        publicKeyJwk: publicKey,
+        createdAt: now,
+      });
     });
     return { bindingId };
   }

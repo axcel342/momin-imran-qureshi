@@ -12,7 +12,10 @@ export class RolesGuard implements CanActivate {
 
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, [ctx.getHandler(), ctx.getClass()]);
+    const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
     if (!req.actor) return true; // bearer-only / health-probe routes carry no actor; AuthGuard already vetted them
     if (!roles || !roles.includes(req.actor.role)) throw new DomainError('FORBIDDEN', 'Insufficient role');
     return true;

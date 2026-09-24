@@ -21,7 +21,9 @@ export interface TestContext {
   payments: FakePaymentGateway;
 }
 
-export async function createTestApp(opts: { env?: Record<string, string>; logStream?: pino.DestinationStream } = {}): Promise<TestContext> {
+export async function createTestApp(
+  opts: { env?: Record<string, string>; logStream?: pino.DestinationStream } = {},
+): Promise<TestContext> {
   const idp = await MockIdp.start();
   const config = loadConfig({ ...process.env, SUPABASE_JWKS_URL: idp.jwksUrl, ...opts.env });
   const payments = new FakePaymentGateway();
@@ -34,11 +36,20 @@ export async function createTestApp(opts: { env?: Record<string, string>; logStr
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
   configureApp(app, config, opts.logStream ? { logStream: opts.logStream } : {});
   await app.init();
-  return { app, http: app.getHttpServer(), prisma: app.get(PrismaService), redis: app.get(RedisService), idp, config, payments };
+  return {
+    app,
+    http: app.getHttpServer(),
+    prisma: app.get(PrismaService),
+    redis: app.get(RedisService),
+    idp,
+    config,
+    payments,
+  };
 }
 
 export async function resetState(ctx: TestContext): Promise<void> {
-  await ctx.prisma.$executeRaw`TRUNCATE chat_messages, monthly_usage, subscriptions, device_bindings, users CASCADE`;
+  await ctx.prisma
+    .$executeRaw`TRUNCATE chat_messages, monthly_usage, subscriptions, device_bindings, users CASCADE`;
   await ctx.redis.client.flushdb();
   ctx.payments.reset();
 }

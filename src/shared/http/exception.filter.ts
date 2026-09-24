@@ -19,19 +19,27 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (res.headersSent) return;
     const mapped = this.map(exception);
     if (mapped.code === 'INTERNAL_ERROR') {
-      this.logger.error({ requestId: req.requestId, err: exception instanceof Error ? exception.stack : String(exception) });
+      this.logger.error({
+        requestId: req.requestId,
+        err: exception instanceof Error ? exception.stack : String(exception),
+      });
     }
     sendError(res, mapped.code, mapped.message, req.requestId, mapped.details);
   }
 
   private map(exception: unknown): Mapped {
     if (exception instanceof DomainError) {
-      return { code: exception.code, message: exception.message, ...(exception.details ? { details: exception.details } : {}) };
+      return {
+        code: exception.code,
+        message: exception.message,
+        ...(exception.details ? { details: exception.details } : {}),
+      };
     }
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       if (status === 404) return { code: 'NOT_FOUND', message: 'Resource not found' };
-      if (status === 413) return { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds the size limit' };
+      if (status === 413)
+        return { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds the size limit' };
       if (status === 400) return { code: 'VALIDATION_FAILED', message: 'Bad request' };
     }
     return { code: 'INTERNAL_ERROR', message: 'Internal server error' };

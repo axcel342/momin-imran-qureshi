@@ -62,27 +62,48 @@ export class Subscription {
     return { ...this.props };
   }
 
-  get id(): string { return this.props.id; }
-  get userId(): string { return this.props.userId; }
-  get autoRenew(): boolean { return this.props.autoRenew; }
-  get priceCents(): number { return this.props.priceCents; }
-  get status(): SubscriptionStatus { return this.props.status; }
-  get createdAt(): Date { return this.props.createdAt; }
-  get startDate(): Date { return this.props.startDate; }
-  get endDate(): Date { return this.props.endDate; }
+  get id(): string {
+    return this.props.id;
+  }
+  get userId(): string {
+    return this.props.userId;
+  }
+  get autoRenew(): boolean {
+    return this.props.autoRenew;
+  }
+  get priceCents(): number {
+    return this.props.priceCents;
+  }
+  get status(): SubscriptionStatus {
+    return this.props.status;
+  }
+  get createdAt(): Date {
+    return this.props.createdAt;
+  }
+  get startDate(): Date {
+    return this.props.startDate;
+  }
+  get endDate(): Date {
+    return this.props.endDate;
+  }
 
   remaining(): number | null {
-    return this.props.maxMessages === null ? null : Math.max(0, this.props.maxMessages - this.props.usedMessages);
+    return this.props.maxMessages === null
+      ? null
+      : Math.max(0, this.props.maxMessages - this.props.usedMessages);
   }
 
   isUsableAt(now: Date): boolean {
     const p = this.props;
     const remaining = this.remaining();
-    return p.status === 'ACTIVE' && p.startDate <= now && now < p.endDate && (remaining === null || remaining > 0);
+    return (
+      p.status === 'ACTIVE' && p.startDate <= now && now < p.endDate && (remaining === null || remaining > 0)
+    );
   }
 
   consume(now: Date): void {
-    if (!this.isUsableAt(now)) throw new DomainError('QUOTA_EXHAUSTED', 'Subscription has no remaining messages');
+    if (!this.isUsableAt(now))
+      throw new DomainError('QUOTA_EXHAUSTED', 'Subscription has no remaining messages');
     this.props.usedMessages += 1;
   }
 
@@ -119,14 +140,24 @@ export class Subscription {
     }
     const startDate = this.props.endDate;
     const endDate = addCycle(startDate, this.props.billingCycle);
-    Object.assign(this.props, { startDate, endDate, renewalDate: endDate, usedMessages: 0 } satisfies Partial<SubscriptionProps>);
+    Object.assign(this.props, {
+      startDate,
+      endDate,
+      renewalDate: endDate,
+      usedMessages: 0,
+    } satisfies Partial<SubscriptionProps>);
   }
 
   private deactivate(reason: InactiveReason): void {
-    Object.assign(this.props, { status: 'INACTIVE', inactiveReason: reason, renewalDate: null } satisfies Partial<SubscriptionProps>);
+    Object.assign(this.props, {
+      status: 'INACTIVE',
+      inactiveReason: reason,
+      renewalDate: null,
+    } satisfies Partial<SubscriptionProps>);
   }
 
   private assertActive(): void {
-    if (this.props.status !== 'ACTIVE') throw new DomainError('SUBSCRIPTION_NOT_ACTIVE', 'Subscription is not active');
+    if (this.props.status !== 'ACTIVE')
+      throw new DomainError('SUBSCRIPTION_NOT_ACTIVE', 'Subscription is not active');
   }
 }

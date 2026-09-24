@@ -9,7 +9,11 @@ describe('period calculator (UTC, end-of-month clamping)', () => {
     expect(addMonthsUtc(new Date('2028-01-31T00:00:00Z'), 1).toISOString()).toBe('2028-02-29T00:00:00.000Z');
   });
   it('rolls over the year for December and for yearly cycles', () => {
-    expect(addCycle(new Date('2026-12-15T00:00:00Z'), 'MONTHLY').toISOString()).toBe('2027-01-15T00:00:00.000Z');
-    expect(addCycle(new Date('2028-02-29T00:00:00Z'), 'YEARLY').toISOString()).toBe('2029-02-28T00:00:00.000Z');
+    expect(addCycle(new Date('2026-12-15T00:00:00Z'), 'MONTHLY').toISOString()).toBe(
+      '2027-01-15T00:00:00.000Z',
+    );
+    expect(addCycle(new Date('2028-02-29T00:00:00Z'), 'YEARLY').toISOString()).toBe(
+      '2029-02-28T00:00:00.000Z',
+    );
   });
 });

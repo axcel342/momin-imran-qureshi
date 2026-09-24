@@ -13,7 +13,15 @@ export interface SignedRequestParts {
 }
 
 export function canonicalString(p: SignedRequestParts): string {
-  return [SIGNATURE_VERSION, p.method.toUpperCase(), p.url, p.timestamp, p.nonce, p.bodySha256, p.tokenSha256].join('\n');
+  return [
+    SIGNATURE_VERSION,
+    p.method.toUpperCase(),
+    p.url,
+    p.timestamp,
+    p.nonce,
+    p.bodySha256,
+    p.tokenSha256,
+  ].join('\n');
 }
 
 export class SignatureVerifier {
@@ -24,7 +32,8 @@ export class SignatureVerifier {
 
   assertFresh(timestamp: string, now: Date): void {
     const ts = Number(timestamp);
-    if (!Number.isSafeInteger(ts)) throw new DomainError('SIGNATURE_REQUIRED', 'Signature timestamp is malformed');
+    if (!Number.isSafeInteger(ts))
+      throw new DomainError('SIGNATURE_REQUIRED', 'Signature timestamp is malformed');
     if (Math.abs(now.getTime() / 1000 - ts) > this.maxSkewSeconds) {
       throw new DomainError('REQUEST_EXPIRED', 'Request timestamp is outside the allowed window');
     }

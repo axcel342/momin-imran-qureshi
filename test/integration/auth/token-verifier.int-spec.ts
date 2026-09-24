@@ -19,7 +19,9 @@ describe('SupabaseTokenVerifier (against a real JWKS endpoint)', () => {
     const userId = randomUUID();
     const sessionId = randomUUID();
     const authAt = new Date(Math.floor(Date.now() / 1000) * 1000);
-    const v = await verifier.verify(await idp.token({ userId, sessionId, email: 'a@b.co', authenticatedAt: authAt }));
+    const v = await verifier.verify(
+      await idp.token({ userId, sessionId, email: 'a@b.co', authenticatedAt: authAt }),
+    );
     expect(v).toEqual({ userId, sessionId, email: 'a@b.co', authenticatedAt: authAt });
   });
 
@@ -34,7 +36,9 @@ describe('SupabaseTokenVerifier (against a real JWKS endpoint)', () => {
   });
 
   it('rejects expired tokens with TOKEN_EXPIRED', async () => {
-    await expect(verifier.verify(await idp.token({ expiresInSeconds: -60 }))).rejects.toMatchObject({ code: 'TOKEN_EXPIRED' });
+    await expect(verifier.verify(await idp.token({ expiresInSeconds: -60 }))).rejects.toMatchObject({
+      code: 'TOKEN_EXPIRED',
+    });
   });
 
   it('rejects alg:none and garbage with INVALID_TOKEN', async () => {

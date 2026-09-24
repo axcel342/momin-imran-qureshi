@@ -38,12 +38,16 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
   }
 
   async listByUser(userId: string, limit: number): Promise<Subscription[]> {
-    const rows = await this.tx.db().subscription.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
+    const rows = await this.tx
+      .db()
+      .subscription.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
     return rows.map(toDomain);
   }
 
   async listActiveForUser(userId: string): Promise<Subscription[]> {
-    const rows = await this.tx.db().subscription.findMany({ where: { userId, status: 'ACTIVE' }, orderBy: { id: 'asc' } });
+    const rows = await this.tx
+      .db()
+      .subscription.findMany({ where: { userId, status: 'ACTIVE' }, orderBy: { id: 'asc' } });
     return rows.map(toDomain);
   }
 
@@ -64,12 +68,16 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
   async save(sub: Subscription): Promise<void> {
     const s = sub.toSnapshot();
     const { id, userId, createdAt, ...mutable } = s;
-    await this.tx.db().subscription.upsert({ where: { id }, create: { id, userId, createdAt, ...mutable }, update: mutable });
+    await this.tx
+      .db()
+      .subscription.upsert({ where: { id }, create: { id, userId, createdAt, ...mutable }, update: mutable });
   }
 
   private async byIds(ids: string[]): Promise<Subscription[]> {
     if (ids.length === 0) return [];
-    const rows = await this.tx.db().subscription.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
+    const rows = await this.tx
+      .db()
+      .subscription.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
     return rows.map(toDomain);
   }
 }

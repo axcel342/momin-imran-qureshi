@@ -8,10 +8,19 @@ export class SimulatedPaymentGateway implements PaymentGateway {
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
-  async charge(input: { subscriptionId: string; userId: string; amountCents: number }): Promise<{ ok: boolean }> {
+  async charge(input: {
+    subscriptionId: string;
+    userId: string;
+    amountCents: number;
+  }): Promise<{ ok: boolean }> {
     await new Promise((r) => setTimeout(r, 20 + Math.floor(Math.random() * 80)));
     const ok = Math.random() >= this.config.PAYMENT_FAILURE_RATE;
-    this.logger.log({ msg: 'payment simulated', subscriptionId: input.subscriptionId, amountCents: input.amountCents, ok });
+    this.logger.log({
+      msg: 'payment simulated',
+      subscriptionId: input.subscriptionId,
+      amountCents: input.amountCents,
+      ok,
+    });
     return { ok };
   }
 }

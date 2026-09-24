@@ -4,7 +4,10 @@ import type { Actor } from '../../shared/domain/actor';
 import { DomainError } from '../../shared/domain/errors';
 import type { SubscriptionProps } from '../domain/entities/subscription';
 import { accessDenied, SubscriptionAccessPolicy } from '../domain/policies/subscription-access.policy';
-import { SUBSCRIPTION_REPOSITORY, type SubscriptionRepository } from '../repositories/subscription.repository';
+import {
+  SUBSCRIPTION_REPOSITORY,
+  type SubscriptionRepository,
+} from '../repositories/subscription.repository';
 
 @Injectable()
 export class SetAutoRenewUseCase {

@@ -21,7 +21,10 @@ export function configureApp(
     {
       level: config.LOG_LEVEL,
       base: undefined,
-      redact: { paths: ['req.headers.authorization', 'req.headers["x-signature"]', 'req.headers["x-health-token"]'], censor: '[REDACTED]' },
+      redact: {
+        paths: ['req.headers.authorization', 'req.headers["x-signature"]', 'req.headers["x-health-token"]'],
+        censor: '[REDACTED]',
+      },
     },
     opts.logStream,
   );

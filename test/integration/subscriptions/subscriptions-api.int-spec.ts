@@ -15,49 +15,101 @@ describe('Subscriptions API', () => {
   afterAll(() => closeTestApp(ctx));
 
   it('creates an active bundle with catalog quota and price', async () => {
-    const res = await user.post('/v1/subscriptions', { tier: 'PRO', billingCycle: 'YEARLY', autoRenew: true });
+    const res = await user.post('/v1/subscriptions', {
+      tier: 'PRO',
+      billingCycle: 'YEARLY',
+      autoRenew: true,
+    });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ tier: 'PRO', billingCycle: 'YEARLY', maxMessages: 100, priceCents: 29990, status: 'ACTIVE', autoRenew: true, userId: user.userId });
-    expect(new Date(res.body.endDate).getUTCFullYear()).toBe(new Date(res.body.startDate).getUTCFullYear() + 1);
+    expect(res.body).toMatchObject({
+      tier: 'PRO',
+      billingCycle: 'YEARLY',
+      maxMessages: 100,
+      priceCents: 29990,
+      status: 'ACTIVE',
+      autoRenew: true,
+      userId: user.userId,
+    });
+    expect(new Date(res.body.endDate).getUTCFullYear()).toBe(
+      new Date(res.body.startDate).getUTCFullYear() + 1,
+    );
   });
 
   it('returns 402 PAYMENT_FAILED and persists the bundle as inactive when payment fails', async () => {
     ctx.payments.failNext();
-    const res = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const res = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     expect(res.status).toBe(402);
     expect(res.body.error.code).toBe('PAYMENT_FAILED');
     const list = await user.get('/v1/subscriptions');
     expect(list.body.items).toHaveLength(1);
-    expect(list.body.items[0]).toMatchObject({ status: 'INACTIVE', inactiveReason: 'PAYMENT_FAILED', id: res.body.error.details.subscriptionId });
+    expect(list.body.items[0]).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'PAYMENT_FAILED',
+      id: res.body.error.details.subscriptionId,
+    });
   });
 
   it('rejects mass-assignment attempts on create and patch', async () => {
-    const create = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true, userId: randomUUID(), maxMessages: 1e6 });
+    const create = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+      userId: randomUUID(),
+      maxMessages: 1e6,
+    });
     expect(create.status).toBe(400);
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
-    const patch = await user.patch(`/v1/subscriptions/${sub.body.id}`, { autoRenew: false, status: 'ACTIVE' });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
+    const patch = await user.patch(`/v1/subscriptions/${sub.body.id}`, {
+      autoRenew: false,
+      status: 'ACTIVE',
+    });
     expect(patch.status).toBe(400);
   });
 
   it('toggles auto-renew for the owner', async () => {
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     const res = await user.patch(`/v1/subscriptions/${sub.body.id}`, { autoRenew: false });
     expect(res.status).toBe(200);
     expect(res.body.autoRenew).toBe(false);
   });
 
   it('cancels immediately, then refuses to cancel again', async () => {
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     const res = await user.post(`/v1/subscriptions/${sub.body.id}/cancel`);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'INACTIVE', inactiveReason: 'CANCELLED', autoRenew: false, renewalDate: null });
+    expect(res.body).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'CANCELLED',
+      autoRenew: false,
+      renewalDate: null,
+    });
     const again = await user.post(`/v1/subscriptions/${sub.body.id}/cancel`);
     expect(again.status).toBe(409);
     expect(again.body.error.code).toBe('SUBSCRIPTION_NOT_ACTIVE');
   });
 
   it('enforces domain policy: other users get 404, admins may cancel but not toggle auto-renew', async () => {
-    const sub = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew: true });
+    const sub = await user.post('/v1/subscriptions', {
+      tier: 'BASIC',
+      billingCycle: 'MONTHLY',
+      autoRenew: true,
+    });
     const other = await TestClient.register(ctx);
     expect((await other.post(`/v1/subscriptions/${sub.body.id}/cancel`)).status).toBe(404);
     const admin = await TestClient.register(ctx, { role: 'ADMIN' });

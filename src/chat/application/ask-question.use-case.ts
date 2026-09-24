@@ -11,7 +11,10 @@ import { AI_COMPLETION, BUNDLE_QUOTA, type AiCompletionPort, type BundleQuotaPor
 import { QuotaAllocator } from '../domain/services/quota-allocator';
 import { UsagePeriod } from '../domain/services/usage-period';
 import { CHAT_MESSAGE_REPOSITORY, type ChatMessageRepository } from '../repositories/chat-message.repository';
-import { MONTHLY_USAGE_REPOSITORY, type MonthlyUsageRepository } from '../repositories/monthly-usage.repository';
+import {
+  MONTHLY_USAGE_REPOSITORY,
+  type MonthlyUsageRepository,
+} from '../repositories/monthly-usage.repository';
 
 export interface AskResult {
   message: ChatMessageRecord;
@@ -32,7 +35,12 @@ export class AskQuestionUseCase {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  async execute(input: { actor: Actor; question: string; requestId: string; isCancelled: () => boolean }): Promise<AskResult> {
+  async execute(input: {
+    actor: Actor;
+    question: string;
+    requestId: string;
+    isCancelled: () => boolean;
+  }): Promise<AskResult> {
     const userId = input.actor.userId;
     const freeLimit = this.config.FREE_MESSAGES_PER_MONTH;
 
@@ -41,7 +49,11 @@ export class AskQuestionUseCase {
     const period = UsagePeriod.fromDate(checkNow).value;
     const snapshot = (await this.usage.find(userId, period)) ?? MonthlyUsage.empty(userId, period, freeLimit);
     if (!snapshot.hasFreeRemaining()) {
-      this.allocator.allocate({ usage: snapshot, bundles: await this.bundles.peekUsableBundles(userId, checkNow), now: checkNow });
+      this.allocator.allocate({
+        usage: snapshot,
+        bundles: await this.bundles.peekUsableBundles(userId, checkNow),
+        now: checkNow,
+      });
     }
 
     // 2. Mock AI call: outside any transaction, no locks held.
@@ -81,7 +93,12 @@ export class AskQuestionUseCase {
       await this.messages.create(message);
       return {
         message,
-        quota: { source: allocation.source, subscriptionId: message.subscriptionId, freeRemaining: usage.freeRemaining, freeResetsAt: p.resetsAt() },
+        quota: {
+          source: allocation.source,
+          subscriptionId: message.subscriptionId,
+          freeRemaining: usage.freeRemaining,
+          freeResetsAt: p.resetsAt(),
+        },
       };
     });
   }

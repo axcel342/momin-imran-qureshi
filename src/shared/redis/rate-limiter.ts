@@ -13,7 +13,10 @@ export class RateLimiter {
   constructor(private readonly redis: RedisService) {}
 
   async hit(key: string, limit: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
-    const [count, ttl] = (await this.redis.run((c) => c.eval(FIXED_WINDOW_LUA, 1, key, WINDOW_SECONDS))) as [number, number];
+    const [count, ttl] = (await this.redis.run((c) => c.eval(FIXED_WINDOW_LUA, 1, key, WINDOW_SECONDS))) as [
+      number,
+      number,
+    ];
     return { allowed: count <= limit, retryAfterSeconds: ttl > 0 ? ttl : WINDOW_SECONDS };
   }
 }

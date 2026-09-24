@@ -4,7 +4,8 @@ import { sendError } from './send-error';
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 
 export function contentTypeMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const hasBody = Number(req.headers['content-length'] ?? '0') > 0 || req.headers['transfer-encoding'] !== undefined;
+  const hasBody =
+    Number(req.headers['content-length'] ?? '0') > 0 || req.headers['transfer-encoding'] !== undefined;
   if (!hasBody) {
     next();
     return;

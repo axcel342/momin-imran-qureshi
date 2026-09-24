@@ -18,7 +18,10 @@ describe('Billing cycle', () => {
   async function dueSubscription(autoRenew: boolean): Promise<string> {
     const res = await user.post('/v1/subscriptions', { tier: 'BASIC', billingCycle: 'MONTHLY', autoRenew });
     const past = new Date(Date.now() - 1000);
-    await ctx.prisma.subscription.update({ where: { id: res.body.id }, data: { endDate: past, renewalDate: past, usedMessages: 4 } });
+    await ctx.prisma.subscription.update({
+      where: { id: res.body.id },
+      data: { endDate: past, renewalDate: past, usedMessages: 4 },
+    });
     return res.body.id as string;
   }
 
@@ -38,7 +41,10 @@ describe('Billing cycle', () => {
     ctx.payments.failNext();
     const res = await admin.post('/v1/admin/billing/run');
     expect(res.body).toEqual({ processed: 1, renewed: 0, failed: 1, expired: 0 });
-    expect(await ctx.prisma.subscription.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'INACTIVE', inactiveReason: 'PAYMENT_FAILED' });
+    expect(await ctx.prisma.subscription.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'PAYMENT_FAILED',
+    });
   });
 
   it('expires without charging when auto-renew is off', async () => {
@@ -47,7 +53,10 @@ describe('Billing cycle', () => {
     const res = await admin.post('/v1/admin/billing/run');
     expect(res.body).toEqual({ processed: 1, renewed: 0, failed: 0, expired: 1 });
     expect(ctx.payments.calls).toBe(callsBefore);
-    expect(await ctx.prisma.subscription.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'INACTIVE', inactiveReason: 'EXPIRED' });
+    expect(await ctx.prisma.subscription.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      status: 'INACTIVE',
+      inactiveReason: 'EXPIRED',
+    });
   });
 
   it('does not touch subscriptions that are not yet due', async () => {

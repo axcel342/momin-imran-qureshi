@@ -13,9 +13,15 @@ export class MonthlyUsage {
     return new MonthlyUsage(userId, period, 0, freeLimit, 0);
   }
 
-  get freeUsed(): number { return this._freeUsed; }
-  get totalMessages(): number { return this._totalMessages; }
-  get freeRemaining(): number { return Math.max(0, this.freeLimit - this._freeUsed); }
+  get freeUsed(): number {
+    return this._freeUsed;
+  }
+  get totalMessages(): number {
+    return this._totalMessages;
+  }
+  get freeRemaining(): number {
+    return Math.max(0, this.freeLimit - this._freeUsed);
+  }
 
   hasFreeRemaining(): boolean {
     return this._freeUsed < this.freeLimit;
