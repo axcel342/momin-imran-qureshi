@@ -63,6 +63,7 @@ button.ghost:hover {
   border-color: var(--housing);
 }
 
+.signin button[type='submit'],
 .composer button {
   background: var(--housing);
   color: var(--enamel);
