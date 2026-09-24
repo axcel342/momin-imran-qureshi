@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Tier {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InactiveReason {
+  CANCELLED
+  PAYMENT_FAILED
+  EXPIRED
+}
+
+enum QuotaSource {
+  FREE
+  BUNDLE
+}
+
+model User {
+  id            String          @id @db.Uuid
+  email         String
+  role          Role            @default(USER)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  bindings      DeviceBinding[]
+  usage         MonthlyUsage[]
+  subscriptions Subscription[]
+  chatMessages  ChatMessage[]
+
+  @@map("users")
+}
+
+model DeviceBinding {
+  id           String   @id @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  sessionId    String   @unique @map("session_id") @db.Uuid
+  publicKeyJwk Json     @map("public_key_jwk")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@map("device_bindings")
+}
+
+model MonthlyUsage {
+  userId        String @map("user_id") @db.Uuid
+  period        String @db.Char(7)
+  freeUsed      Int    @default(0) @map("free_used")
+  freeLimit     Int    @map("free_limit")
+  totalMessages Int    @default(0) @map("total_messages")
+  user          User   @relation(fields: [userId], references: [id])
+
+  @@id([userId, period])
+  @@map("monthly_usage")
+}
+
+model Subscription {
+  id             String             @id @db.Uuid
+  userId         String             @map("user_id") @db.Uuid
+  tier           Tier
+  billingCycle   BillingCycle       @map("billing_cycle")
+  maxMessages    Int?               @map("max_messages")
+  usedMessages   Int                @default(0) @map("used_messages")
+  priceCents     Int                @map("price_cents")
+  autoRenew      Boolean            @map("auto_renew")
+  status         SubscriptionStatus
+  inactiveReason InactiveReason?    @map("inactive_reason")
+  startDate      DateTime           @map("start_date") @db.Timestamptz(3)
+  endDate        DateTime           @map("end_date") @db.Timestamptz(3)
+  renewalDate    DateTime?          @map("renewal_date") @db.Timestamptz(3)
+  cancelledAt    DateTime?          @map("cancelled_at") @db.Timestamptz(3)
+  createdAt      DateTime           @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user           User               @relation(fields: [userId], references: [id])
+  chatMessages   ChatMessage[]
+
+  @@index([userId, status])
+  @@index([status, renewalDate])
+  @@map("subscriptions")
+}
+
+model ChatMessage {
+  id               String        @id @db.Uuid
+  userId           String        @map("user_id") @db.Uuid
+  question         String
+  answer           String
+  quotaSource      QuotaSource   @map("quota_source")
+  subscriptionId   String?       @map("subscription_id") @db.Uuid
+  period           String        @db.Char(7)
+  model            String
+  promptTokens     Int           @map("prompt_tokens")
+  completionTokens Int           @map("completion_tokens")
+  totalTokens      Int           @map("total_tokens")
+  latencyMs        Int           @map("latency_ms")
+  requestId        String        @map("request_id")
+  createdAt        DateTime      @map("created_at") @db.Timestamptz(3)
+  user             User          @relation(fields: [userId], references: [id])
+  subscription     Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("chat_messages")
+}
