@@ -7,6 +7,23 @@ A secure REST backend in TypeScript with DDD/Clean Architecture and PostgreSQL. 
 
 Everything in this repository is traceable to the take-home PDF, `GGI - BACKEND TEST POSTURE (1) (1).pdf`, which is committed at the root. The approved design spec lives in `docs/superpowers/specs/2026-09-24-ggi-backend-design.md`; the task-by-task implementation plan is in `docs/superpowers/plans/2026-09-24-ggi-backend.md`.
 
+## Live demo
+
+The API and a minimal demo client are deployed on Vercel against a dedicated Supabase project and an
+Upstash Redis:
+
+- **Demo UI:** https://momin-imran-qureshi-demo.vercel.app
+- **API:** https://momin-imran-qureshi-api.vercel.app
+- **Demo admin account:** `demo@example.com` / `Str0ng-Passw0rd!` (role `ADMIN` on the demo project).
+
+These credentials are demo-only, for a throwaway project with simulated payment data — never reuse
+this password anywhere. Sign up from the UI with any address to see the clean free-quota flow
+(auto-confirm is on); the admin account exists for `GET /v1/admin/metrics`,
+`POST /v1/admin/billing/run` and the CLI (`npm run client -- metrics`). The deployed instance has
+`BILLING_CRON` disabled, so renewals are triggered through the admin endpoint rather than a scheduler.
+Deployment notes live in `docs/superpowers/specs/2026-09-24-vercel-deployment-design.md` (API) and
+`docs/superpowers/specs/2026-09-24-demo-frontend-design.md` (UI).
+
 ## Overview
 
 - Base `/v1`, JSON only.
@@ -55,6 +72,43 @@ There are **11 endpoints**:
 Domain errors carry a `code`, and one global exception filter maps them to HTTP responses.
 
 ## Architecture decisions
+
+### System architecture
+
+```mermaid
+flowchart LR
+  subgraph clients["Clients"]
+    web["Demo SPA<br/>Vite + React, WebCrypto signing"]
+    cli["CLI<br/>scripts/client.ts"]
+  end
+
+  subgraph vercel["Vercel"]
+    static["Static site<br/>web/dist"]
+    fn["Serverless function<br/>api/index.ts — NestJS 11"]
+  end
+
+  subgraph supabase["Supabase (managed)"]
+    auth["Auth<br/>email/password + GitHub"]
+    jwks["JWKS<br/>ES256 keys"]
+    pg[("PostgreSQL 16<br/>users · monthly_usage<br/>subscriptions · chat_messages")]
+  end
+
+  redis[("Upstash Redis<br/>rate-limit counters · single-use nonces")]
+
+  web -->|HTTPS| static
+  web -->|login| auth
+  cli -->|login| auth
+  web -->|"signed REST /v1 + bearer"| fn
+  cli -->|"signed REST /v1 + bearer"| fn
+  fn -->|"jwtVerify against JWKS"| jwks
+  fn -->|"Prisma (transaction pooler)"| pg
+  fn -->|"ioredis"| redis
+```
+
+The same Nest application runs in both shapes: locally as a normal server (`npm run start:dev`,
+Postgres and Redis from `compose.yaml`), and on Vercel as one serverless function wrapped by
+`api/index.ts`. Vercel's body helpers are disabled there so the raw request body reaches the app's
+JSON parser and request signatures can be verified. The sections below describe the internals.
 
 ### Layers and rules
 
