@@ -302,6 +302,13 @@
   .footer { padding-block: 64px 80px; }
   .footer .row { display: flex; flex-wrap: wrap; gap: 12px 40px; font-size: 14px; color: var(--ink-2); }
   .footer p { font-size: 14px; color: var(--ink-3); margin: 24px 0 0; max-width: 60em; }
+  .admin { margin-top: 32px; background: var(--bg-alt); border-radius: 18px; padding: 20px 24px; max-width: 560px; }
+  .admin h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 12px; }
+  .admin dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; margin: 0; font-size: 15px; }
+  .admin dt { color: var(--ink-2); }
+  .admin dd { margin: 0; }
+  .admin dd.sel { user-select: all; }
+  .admin p { margin-top: 14px; }
 
   @media (max-width: 760px) {
     section { padding-block: 64px; }
@@ -915,6 +922,15 @@
     <div class="row">
       <span>Demo UI: <a href="https://momin-imran-qureshi-demo.vercel.app">momin-imran-qureshi-demo.vercel.app</a></span>
       <span>API: <a href="https://momin-imran-qureshi-api.vercel.app">momin-imran-qureshi-api.vercel.app</a></span>
+    </div>
+    <div class="admin">
+      <h3>Admin sign-in for the demo</h3>
+      <dl>
+        <dt>Email</dt><dd class="sel"><code>demo@example.com</code></dd>
+        <dt>Password</dt><dd class="sel"><code>Str0ng-Passw0rd!</code></dd>
+        <dt>Role</dt><dd><code>ADMIN</code> on the demo project</dd>
+      </dl>
+      <p>This account belongs to a throwaway demo project that has only simulated payment data. Use it for <code>GET /v1/admin/metrics</code> and <code>POST /v1/admin/billing/run</code>. Don't reuse this password anywhere else. Any other address you sign up with gets a regular user account with the free quota.</p>
     </div>
     <p>CI runs format, lint, typecheck, unit tests and integration tests against Postgres 16 and Redis 7 service containers on every push. Integration tests use a local mock JWKS instead of Supabase. Built from the repository's README, Prisma schema and source.</p>
   </div>
