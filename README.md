@@ -14,11 +14,11 @@ Upstash Redis:
 
 - **Demo UI:** https://momin-imran-qureshi-demo.vercel.app
 - **API:** https://momin-imran-qureshi-api.vercel.app
-- **Demo admin account:** `demo@example.com` / `Str0ng-Passw0rd!` (role `ADMIN` on the demo project).
+- **Sign in as admin:** email `demo@example.com`, password `Str0ng-Passw0rd!` (role `ADMIN` on the demo project).
 
 These credentials are demo-only, for a throwaway project with simulated payment data — never reuse
-this password anywhere. Sign up from the UI with any address to see the clean free-quota flow
-(auto-confirm is on); the admin account exists for `GET /v1/admin/metrics`,
+this password anywhere. Sign in with them at the demo UI, or sign up with any address to see the clean
+free-quota flow (auto-confirm is on). The admin account is what exposes `GET /v1/admin/metrics`,
 `POST /v1/admin/billing/run` and the CLI (`npm run client -- metrics`). The deployed instance has
 `BILLING_CRON` disabled, so renewals are triggered through the admin endpoint rather than a scheduler.
 Deployment notes live in `docs/superpowers/specs/2026-09-24-vercel-deployment-design.md` (API) and
