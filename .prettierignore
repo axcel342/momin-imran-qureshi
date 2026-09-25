@@ -4,3 +4,4 @@ node_modules
 prisma/migrations
 *.pdf
 package-lock.json
+docs/architecture.html
