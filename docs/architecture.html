@@ -1,0 +1,954 @@
+<title>GGI Backend Architecture</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f5f5f7;
+    --tile: #ffffff;
+    --group: #f5f5f7;
+    --group-2: #e8e8ed;
+    --band: #fafafc;
+    --ink: #1d1d1f;
+    --ink-2: #6e6e73;
+    --ink-3: #86868b;
+    --line: #d2d2d7;
+    --accent: #0071e3;
+    --accent-soft: rgba(0, 113, 227, 0.07);
+    --good: #248a3d;
+    --warn: #b64400;
+    --nav: rgba(255, 255, 255, 0.78);
+    --code-bg: #1d1d1f;
+    --code-ink: #f5f5f7;
+    --code-dim: #8e8e93;
+    --code-key: #64b5ff;
+    --code-good: #30d158;
+    --code-line: #3a3a3c;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #000000;
+      --bg-alt: #0f0f10;
+      --tile: #1c1c1e;
+      --group: #2c2c2e;
+      --group-2: #2c2c2e;
+      --band: #232325;
+      --ink: #f5f5f7;
+      --ink-2: #a1a1a6;
+      --ink-3: #86868b;
+      --line: #3a3a3c;
+      --accent: #2997ff;
+      --accent-soft: rgba(41, 151, 255, 0.12);
+      --good: #30d158;
+      --warn: #ff9f0a;
+      --nav: rgba(22, 22, 23, 0.78);
+      --code-bg: #1c1c1e;
+      --code-line: #3a3a3c;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #000000;
+    --bg-alt: #0f0f10;
+    --tile: #1c1c1e;
+    --group: #2c2c2e;
+    --group-2: #2c2c2e;
+    --band: #232325;
+    --ink: #f5f5f7;
+    --ink-2: #a1a1a6;
+    --ink-3: #86868b;
+    --line: #3a3a3c;
+    --accent: #2997ff;
+    --accent-soft: rgba(41, 151, 255, 0.12);
+    --good: #30d158;
+    --warn: #ff9f0a;
+    --nav: rgba(22, 22, 23, 0.78);
+    --code-bg: #1c1c1e;
+    --code-line: #3a3a3c;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.47;
+    letter-spacing: -0.012em;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  code, .mono { font-family: var(--mono); font-size: 0.88em; letter-spacing: 0; }
+
+  /* local nav */
+  .nav {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 10;
+    background: var(--nav);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner {
+    max-width: 980px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .nav-title { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; color: var(--ink); }
+  .nav-links { display: flex; gap: 20px; overflow-x: auto; scrollbar-width: none; margin-left: auto; }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-links a { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+  .nav-links a:hover { color: var(--ink); text-decoration: none; }
+
+  .wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; }
+  section { padding-block: 88px; }
+  section:nth-of-type(even) { background: var(--bg-alt); }
+
+  /* hero */
+  .hero { text-align: center; padding-block: 72px 88px; }
+  .hero h1 {
+    font-size: clamp(48px, 9vw, 88px);
+    line-height: 1.02;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    margin: 0;
+  }
+  .hero .lede {
+    font-size: clamp(19px, 2.4vw, 24px);
+    line-height: 1.33;
+    color: var(--ink-2);
+    max-width: 34em;
+    margin: 20px auto 0;
+    text-wrap: balance;
+  }
+  .stack { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin: 22px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--ink-3); }
+  .hero-links { display: flex; justify-content: center; gap: 28px; margin-top: 22px; font-size: 17px; }
+
+  .shot {
+    margin: 56px auto 0;
+    max-width: 900px;
+    background: var(--code-bg);
+    border-radius: 22px;
+    color: var(--code-ink);
+    text-align: left;
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    overflow: hidden;
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.45);
+  }
+  .shot-pane { padding: 22px 26px 26px; min-width: 0; }
+  .shot-pane + .shot-pane { border-left: 1px solid var(--code-line); }
+  .shot-head { font-size: 12px; color: var(--code-dim); margin-bottom: 12px; font-weight: 600; letter-spacing: 0.01em; }
+  .shot pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .shot .k { color: var(--code-dim); }
+  .shot .sk { color: var(--code-key); }
+  .shot .ok { color: var(--code-good); font-weight: 600; }
+  .shot .m { color: var(--code-ink); font-weight: 600; }
+
+  /* section heads */
+  .head { max-width: 760px; margin-bottom: 40px; }
+  .head h2 {
+    font-size: clamp(32px, 5vw, 48px);
+    line-height: 1.08;
+    font-weight: 600;
+    letter-spacing: -0.028em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .head p { font-size: 19px; line-height: 1.42; color: var(--ink-2); margin: 16px 0 0; max-width: 40em; }
+
+  /* figures */
+  figure { margin: 0; }
+  .tile {
+    background: var(--tile);
+    border-radius: 28px;
+    padding: 28px;
+  }
+  section:nth-of-type(odd) .tile { background: var(--bg-alt); }
+  section:nth-of-type(odd) .tile .dg .n { fill: var(--bg); }
+  section:nth-of-type(odd) .tile .dg .g { fill: var(--group-2); }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  figcaption { color: var(--ink-2); font-size: 14px; line-height: 1.5; margin-top: 18px; max-width: 62em; }
+  figcaption strong { color: var(--ink); font-weight: 600; }
+
+  .dg { display: block; width: 100%; height: auto; min-width: 760px; }
+  .dg text { font-family: var(--sans); letter-spacing: 0; }
+  .dg .n { fill: var(--tile); stroke: var(--line); stroke-width: 1; }
+  .dg .n-hot { stroke: var(--accent); stroke-width: 1.75; }
+  .dg .n-dash { stroke-dasharray: 5 4; }
+  .dg .g { fill: var(--group); }
+  .dg .band { fill: var(--band); }
+  .dg .tx { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .dg .t1 { font-size: 14px; font-weight: 600; fill: var(--ink); }
+  .dg .t2 { font-size: 12px; fill: var(--ink-2); }
+  .dg .t3 { font-size: 11px; font-weight: 600; fill: var(--ink-3); }
+  .dg .gl { font-size: 13px; font-weight: 600; fill: var(--ink-2); }
+  .dg .mono { font-family: var(--mono); }
+  .dg .e { fill: none; stroke: var(--ink-3); stroke-width: 1.5; }
+  .dg .e-hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .e-ret { stroke-dasharray: 5 4; }
+  .dg .ll { stroke: var(--line); stroke-width: 1.25; stroke-dasharray: 3 5; }
+  .dg .el {
+    font-size: 12px;
+    fill: var(--ink-2);
+    paint-order: stroke;
+    stroke: var(--tile);
+    stroke-width: 6px;
+    stroke-linejoin: round;
+  }
+  section:nth-of-type(odd) .dg .el { stroke: var(--bg-alt); }
+  .dg .el-hot { fill: var(--accent); font-weight: 600; }
+  .dg .dot { fill: var(--ink); }
+  .dg .div { stroke: var(--line); stroke-width: 1; }
+  .mk { fill: var(--ink-3); }
+  .mk-hot { fill: var(--accent); }
+
+  /* deploy toggle */
+  .sys .v-local { display: none; }
+  .sys[data-mode="local"] .v-local { display: inline; }
+  .sys[data-mode="local"] .v-cloud { display: none; }
+  .seg {
+    display: inline-flex;
+    background: var(--group);
+    border-radius: 999px;
+    padding: 3px;
+    margin-bottom: 20px;
+  }
+  .seg button {
+    font: inherit;
+    font-size: 14px;
+    color: var(--ink-2);
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 16px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--tile); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+
+  /* pipeline */
+  .pipe { list-style: none; margin: 0; padding: 0; counter-reset: stage; display: grid; gap: 28px; }
+  .pipe-group h3 { font-size: 13px; font-weight: 600; color: var(--ink-3); margin: 0 0 10px; letter-spacing: 0.01em; }
+  .pipe-group ol { list-style: none; margin: 0; padding: 0; background: var(--tile); border-radius: 18px; overflow: hidden; }
+  .st {
+    counter-increment: stage;
+    display: grid;
+    grid-template-columns: 34px minmax(170px, 230px) 1fr minmax(150px, 230px);
+    gap: 4px 16px;
+    align-items: baseline;
+    padding: 14px 20px;
+  }
+  .st + .st { border-top: 1px solid var(--line); }
+  .st::before { content: counter(stage); font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .st-name { font-family: var(--mono); font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .st-what { font-size: 15px; color: var(--ink-2); }
+  .st-rej { font-family: var(--mono); font-size: 12px; color: var(--warn); text-align: right; }
+  .st-rej.none { color: var(--ink-3); }
+  .st-hot { background: var(--accent-soft); }
+  .st-hot .st-name { color: var(--accent); }
+
+  .limits { margin-top: 40px; }
+  .limits h3, .sub-h { font-size: 21px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; font-weight: 600; color: var(--ink-3); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: 0; }
+
+  /* signing */
+  .canon {
+    margin-top: 28px;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 18px;
+    padding: 20px 24px;
+  }
+  .canon-h { font-size: 12px; color: var(--code-dim); font-weight: 600; margin-bottom: 10px; }
+  .canon pre { margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.75; overflow-x: auto; }
+  .canon .k { color: var(--code-dim); }
+  .canon .sk { color: var(--code-key); }
+
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 48px; }
+  .facts h3 { font-size: 17px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.015em; }
+  .facts p { font-size: 15px; color: var(--ink-2); margin: 0; }
+
+  /* layers table */
+  .layers { background: var(--tile); border-radius: 22px; }
+  .layers table { min-width: 760px; font-size: 13px; }
+  .layers th, .layers td { padding: 14px 18px; }
+  .layers thead th { font-size: 13px; color: var(--ink); font-family: var(--mono); }
+  .layers thead th:first-child { font-family: var(--sans); color: var(--ink-3); }
+  .layers td { font-family: var(--mono); color: var(--ink-2); line-height: 1.75; }
+  .layers td:first-child { font-family: var(--sans); color: var(--ink); font-weight: 600; font-size: 14px; line-height: 1.4; white-space: nowrap; }
+  .layers td:first-child span { display: block; font-weight: 400; font-size: 12px; color: var(--ink-3); }
+  .layers tr.core td { background: var(--accent-soft); }
+  .layers tr.core td:first-child { color: var(--accent); }
+
+  .footer { padding-block: 64px 80px; }
+  .footer .row { display: flex; flex-wrap: wrap; gap: 12px 40px; font-size: 14px; color: var(--ink-2); }
+  .footer p { font-size: 14px; color: var(--ink-3); margin: 24px 0 0; max-width: 60em; }
+  .admin { margin-top: 32px; background: var(--bg-alt); border-radius: 18px; padding: 20px 24px; max-width: 560px; }
+  .admin h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 12px; }
+  .admin dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; margin: 0; font-size: 15px; }
+  .admin dt { color: var(--ink-2); }
+  .admin dd { margin: 0; }
+  .admin dd.sel { user-select: all; }
+  .admin p { margin-top: 14px; }
+
+  @media (max-width: 760px) {
+    section { padding-block: 64px; }
+    .shot { grid-template-columns: 1fr; }
+    .shot-pane + .shot-pane { border-left: 0; border-top: 1px solid var(--code-line); }
+    .tile { padding: 18px; border-radius: 22px; }
+    .st { grid-template-columns: 28px 1fr; }
+    .st-what, .st-rej { grid-column: 2; text-align: left; }
+    .facts { grid-template-columns: 1fr; gap: 22px; }
+    .nav-links { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path class="mk" d="M0 0 L10 5 L0 10 z"/>
+    </marker>
+    <marker id="ah-hot" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path class="mk-hot" d="M0 0 L10 5 L0 10 z"/>
+    </marker>
+  </defs>
+</svg>
+
+<nav class="nav" aria-label="Sections">
+  <div class="nav-inner">
+    <a class="nav-title" href="#top">GGI Backend</a>
+    <div class="nav-links">
+      <a href="#system">System</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#signing">Signing</a>
+      <a href="#layers">Layers</a>
+      <a href="#quota">Quota</a>
+      <a href="#billing">Billing</a>
+      <a href="#data">Data</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <h1>GGI Backend</h1>
+    <p class="lede">A REST API for AI chat and subscription bundles. The bearer token alone is not enough: the device that sends each request also signs it.</p>
+    <ul class="stack">
+      <li>TypeScript</li><li>NestJS 11</li><li>Prisma</li><li>PostgreSQL 16</li><li>Redis 7</li><li>Supabase Auth</li><li>Node 22</li>
+    </ul>
+    <div class="hero-links">
+      <a href="https://momin-imran-qureshi-demo.vercel.app">Open the live demo</a>
+      <a href="https://github.com/axcel342/momin-imran-qureshi">View on GitHub</a>
+    </div>
+
+    <div class="shot" role="img" aria-label="A signed POST to /v1/chat/messages with bearer token and three signature headers, answered with 201 Created and the free quota that remains.">
+      <div class="shot-pane">
+        <div class="shot-head">Request</div>
+<pre><span class="m">POST</span> /v1/chat/messages
+<span class="k">Authorization:</span> Bearer eyJhbGciOiJFUzI1NiIs…
+<span class="sk">X-Signature-Timestamp:</span> 1790294400
+<span class="sk">X-Signature-Nonce:</span> Qm9sZC1uYW5vLTEyOC1iaXQ
+<span class="sk">X-Signature:</span> 7q1Zf0vNw3kR…Yc8Q
+<span class="k">Content-Type:</span> application/json
+
+{ "question": "What is a golden gate?" }</pre>
+      </div>
+      <div class="shot-pane">
+        <div class="shot-head">Response</div>
+<pre><span class="ok">201 Created</span>
+<span class="k">X-Request-Id:</span> 4c1f…a9e2
+
+{
+  "model": "gpt-4o-mini",
+  "usage": { "totalTokens": 61 },
+  "quota": {
+    "source": "FREE",
+    "freeRemaining": 2,
+    "freeResetsAt": "2026-10-01T00:00:00.000Z"
+  }
+}</pre>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- SYSTEM -->
+<section id="system">
+  <div class="wrap">
+    <div class="head">
+      <h2>One NestJS app, two ways to run it.</h2>
+      <p>The same <code>AppModule</code> runs as a long-lived server on your machine and as one Vercel function in production. Only the hosts around it change.</p>
+    </div>
+
+    <figure class="sys" id="sys" data-mode="cloud">
+      <div class="seg" role="group" aria-label="Environment">
+        <button type="button" id="mode-cloud" aria-pressed="true" data-mode="cloud">Deployed</button>
+        <button type="button" id="mode-local" aria-pressed="false" data-mode="local">Local dev</button>
+      </div>
+      <div class="tile scroll">
+        <svg class="dg" viewBox="0 0 1000 470" role="img" aria-label="Clients sign in with Supabase Auth, then send signed requests to the NestJS API, which verifies tokens against Supabase JWKS and uses PostgreSQL through Prisma and Redis through ioredis.">
+          <g transform="translate(0,26)">
+            <!-- clients -->
+            <rect class="g" x="10" y="40" width="200" height="390" rx="20"/>
+            <text class="gl" x="30" y="68">Clients</text>
+            <rect class="n" x="26" y="90" width="168" height="86" rx="14"/>
+            <text class="t1" x="42" y="120">Demo SPA</text>
+            <text class="t2" x="42" y="140">React 19 + Vite</text>
+            <text class="t2" x="42" y="158">WebCrypto device key</text>
+            <rect class="n" x="26" y="300" width="168" height="86" rx="14"/>
+            <text class="t1" x="42" y="330">CLI client</text>
+            <text class="t2 mono" x="42" y="350">scripts/client.ts</text>
+            <text class="t2" x="42" y="368">Node + supabase-js</text>
+
+            <!-- host -->
+            <rect class="g" x="290" y="40" width="280" height="390" rx="20"/>
+            <text class="gl" x="310" y="68"><tspan class="v-cloud">Vercel</tspan><tspan class="v-local">Your machine</tspan></text>
+            <rect class="n" x="306" y="90" width="248" height="86" rx="14"/>
+            <text class="t1" x="322" y="120"><tspan class="v-cloud">Static site</tspan><tspan class="v-local">Vite dev server</tspan></text>
+            <text class="t2" x="322" y="140"><tspan class="v-cloud">web/dist on the edge network</tspan><tspan class="v-local">localhost:5173</tspan></text>
+            <text class="t2" x="322" y="158">Supabase client, signer</text>
+
+            <rect class="n n-hot" x="306" y="200" width="248" height="214" rx="14"/>
+            <text class="t1" x="322" y="230">NestJS 11 API</text>
+            <text class="t2" x="322" y="250"><tspan class="v-cloud">api/index.ts, one serverless function</tspan><tspan class="v-local">nest start --watch on :3000</tspan></text>
+            <line class="div" x1="322" y1="266" x2="538" y2="266"/>
+            <text class="t3" x="322" y="290">Modules</text>
+            <text class="t2" x="322" y="307">auth, chat, subscriptions, health</text>
+            <text class="t3" x="322" y="336">Billing trigger</text>
+            <text class="t2" x="322" y="353"><tspan class="v-cloud mono">POST /v1/admin/billing/run</tspan><tspan class="v-local">BILLING_CRON, every minute</tspan></text>
+            <text class="t3" x="322" y="382">AI</text>
+            <text class="t2" x="322" y="399">Mock OpenAI, 300–1500 ms</text>
+
+            <!-- supabase -->
+            <rect class="g" x="670" y="40" width="310" height="150" rx="20"/>
+            <text class="gl" x="690" y="68">Supabase</text>
+            <rect class="n" x="686" y="84" width="135" height="90" rx="14"/>
+            <text class="t1" x="702" y="114">JWKS</text>
+            <text class="t2" x="702" y="134">ES256 public keys</text>
+            <rect class="n" x="831" y="84" width="135" height="90" rx="14"/>
+            <text class="t1" x="847" y="114">Auth</text>
+            <text class="t2" x="847" y="134">email, GitHub</text>
+            <text class="t2" x="847" y="152">issues JWTs</text>
+
+            <!-- postgres -->
+            <rect class="n" x="670" y="214" width="310" height="100" rx="14"/>
+            <text class="t1" x="690" y="244">PostgreSQL 16</text>
+            <text class="t2" x="690" y="264">5 tables, row locks for quota and billing</text>
+            <text class="t2" x="690" y="282"><tspan class="v-cloud">Hosted by Supabase, transaction pooler</tspan><tspan class="v-local">compose.yaml container</tspan></text>
+
+            <!-- redis -->
+            <rect class="n" x="670" y="334" width="310" height="96" rx="14"/>
+            <text class="t1" x="690" y="364"><tspan class="v-cloud">Upstash Redis</tspan><tspan class="v-local">Redis 7</tspan></text>
+            <text class="t2" x="690" y="384">rate-limit counters, single-use nonces</text>
+            <text class="t2" x="690" y="402"><tspan class="v-cloud">Errors fail closed with 503</tspan><tspan class="v-local">compose.yaml container</tspan></text>
+
+            <!-- edges -->
+            <path class="e" d="M110 40 V14 H898 V84" marker-end="url(#ah)"/>
+            <text class="el" x="500" y="18" text-anchor="middle">sign in, receive JWT with session_id</text>
+
+            <path class="e" d="M194 133 H306" marker-end="url(#ah)"/>
+            <text class="el" x="250" y="125" text-anchor="middle">loads</text>
+
+            <path class="e e-hot" d="M194 162 H246 V343"/>
+            <path class="e e-hot" d="M194 343 H306" marker-end="url(#ah-hot)"/>
+            <text class="el el-hot" x="250" y="378" text-anchor="middle">signed /v1</text>
+            <text class="el el-hot" x="250" y="393" text-anchor="middle">+ bearer</text>
+
+            <path class="e" d="M554 222 H626 V129 H686" marker-end="url(#ah)"/>
+            <text class="el" x="590" y="214" text-anchor="middle">verify JWT</text>
+            <path class="e" d="M554 270 H670" marker-end="url(#ah)"/>
+            <text class="el" x="612" y="262" text-anchor="middle">Prisma</text>
+            <path class="e" d="M554 382 H670" marker-end="url(#ah)"/>
+            <text class="el" x="612" y="374" text-anchor="middle">ioredis</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        <strong>Both clients sign in with Supabase and then call the API directly.</strong> The API never handles passwords. It checks each JWT against Supabase's public keys, stores data in Postgres through Prisma, and keeps rate-limit counters and nonces in Redis.
+        <span class="v-cloud">On Vercel, <code>api/index.ts</code> turns off Vercel's body helpers so the raw body reaches the signature check, and restores the original URL that the signature covers. The billing cron is off, so an admin triggers renewals.</span><span class="v-local">Locally, <code>compose.yaml</code> starts Postgres and Redis, and the <code>@nestjs/schedule</code> cron runs renewals every minute.</span>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- PIPELINE -->
+<section id="pipeline">
+  <div class="wrap">
+    <div class="head">
+      <h2>Every request passes the same checks, in the same order.</h2>
+      <p>Middleware and global guards run for all 11 endpoints. Access is denied by default, and each stage that can reject a request returns its own error code in one standard error format.</p>
+    </div>
+
+    <ol class="pipe">
+      <li class="pipe-group">
+        <h3>Express middleware</h3>
+        <ol>
+          <li class="st"><span class="st-name">request-id</span><span class="st-what">Keeps a UUID <code>X-Request-Id</code> or creates one, then echoes it back</span><span class="st-rej none">never rejects</span></li>
+          <li class="st"><span class="st-name">pino logger</span><span class="st-what">Logs request ID, user and response time when the request completes</span><span class="st-rej none">never rejects</span></li>
+          <li class="st"><span class="st-name">helmet</span><span class="st-what">CSP <code>default-src 'none'</code>, HSTS, nosniff, <code>Cache-Control: no-store</code></span><span class="st-rej none">never rejects</span></li>
+          <li class="st"><span class="st-name">CORS</span><span class="st-what">Allows only origins listed in <code>CORS_ORIGINS</code>, without credentials</span><span class="st-rej none">browser blocks</span></li>
+          <li class="st"><span class="st-name">content-type</span><span class="st-what">POST and PATCH must send <code>application/json</code></span><span class="st-rej">415 UNSUPPORTED_MEDIA_TYPE</span></li>
+          <li class="st"><span class="st-name">JSON parser</span><span class="st-what">16 kb limit; keeps the raw body for signature checks</span><span class="st-rej">413 PAYLOAD_TOO_LARGE</span></li>
+        </ol>
+      </li>
+      <li class="pipe-group">
+        <h3>Global guards</h3>
+        <ol>
+          <li class="st"><span class="st-name">IpRateLimitGuard</span><span class="st-what">Fixed 60-second window per IP, per route group</span><span class="st-rej">429 RATE_LIMITED</span></li>
+          <li class="st st-hot"><span class="st-name">AuthGuard</span><span class="st-what">Verifies the JWT and the device signature. Only <code>@BearerOnly()</code> and <code>@HealthProbe()</code> routes skip the signature</span><span class="st-rej">401 (8 codes)</span></li>
+          <li class="st"><span class="st-name">UserRateLimitGuard</span><span class="st-what">Same window, counted per signed-in user</span><span class="st-rej">429 RATE_LIMITED</span></li>
+          <li class="st"><span class="st-name">RolesGuard</span><span class="st-what">Checks <code>@Roles('ADMIN')</code> on admin routes</span><span class="st-rej">403 FORBIDDEN</span></li>
+        </ol>
+      </li>
+      <li class="pipe-group">
+        <h3>Handler</h3>
+        <ol>
+          <li class="st"><span class="st-name">TimeoutInterceptor</span><span class="st-what">Stops waiting after <code>REQUEST_TIMEOUT_MS</code> (10 s)</span><span class="st-rej">504 REQUEST_TIMEOUT</span></li>
+          <li class="st"><span class="st-name">ZodValidationPipe</span><span class="st-what"><code>.strict()</code> schemas reject unknown fields; free text is stripped of HTML</span><span class="st-rej">400 VALIDATION_FAILED</span></li>
+          <li class="st"><span class="st-name">controller → use case</span><span class="st-what">Builds the <code>Actor</code>, then a domain policy decides who may act on what</span><span class="st-rej">402 · 403 · 404 · 409</span></li>
+          <li class="st"><span class="st-name">GlobalExceptionFilter</span><span class="st-what">Maps each <code>DomainError</code> code to its status and the <code>{ error: { code, message, requestId } }</code> body</span><span class="st-rej none">formats every error</span></li>
+        </ol>
+      </li>
+    </ol>
+
+    <div class="limits">
+      <h3>Rate limits per minute</h3>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Group</th><th>Routes</th><th class="num">Per IP</th><th class="num">Per user</th></tr></thead>
+          <tbody>
+            <tr><td>auth</td><td><code>/v1/auth/*</code></td><td class="num">20</td><td class="num">10</td></tr>
+            <tr><td>chat</td><td><code>/v1/chat/messages</code></td><td class="num">60</td><td class="num">20</td></tr>
+            <tr><td>subscriptions</td><td><code>/v1/subscriptions*</code></td><td class="num">60</td><td class="num">30</td></tr>
+            <tr><td>admin</td><td><code>/v1/admin/*</code></td><td class="num">60</td><td class="num">60</td></tr>
+            <tr><td>ops</td><td><code>/health</code></td><td class="num">30</td><td class="num">30</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SIGNING -->
+<section id="signing">
+  <div class="wrap">
+    <div class="head">
+      <h2>A stolen token is not enough.</h2>
+      <p>Each login session binds one ECDSA P-256 public key. After that, every request must be signed with the matching private key, sent within 60 seconds, and never replayed.</p>
+    </div>
+
+    <figure>
+      <div class="tile scroll">
+        <svg class="dg" viewBox="0 0 1080 640" role="img" aria-label="Sequence: the client signs in with Supabase, generates a P-256 key and registers it once. For every later request the API verifies the JWT, the timestamp, the bound key's signature and a single-use nonce in Redis.">
+          <!-- phase bands -->
+          <rect class="band" x="0" y="80" width="1080" height="232" rx="16"/>
+          <rect class="band" x="0" y="328" width="1080" height="304" rx="16"/>
+          <text class="gl" x="16" y="108">Once per</text>
+          <text class="gl" x="16" y="126">session</text>
+          <text class="gl" x="16" y="356">Every</text>
+          <text class="gl" x="16" y="374">request</text>
+
+          <!-- heads -->
+          <rect class="n" x="125" y="16" width="130" height="44" rx="12"/>
+          <text class="t1" x="190" y="43" text-anchor="middle">Client</text>
+          <rect class="n" x="315" y="16" width="130" height="44" rx="12"/>
+          <text class="t1" x="380" y="43" text-anchor="middle">Supabase</text>
+          <rect class="n n-hot" x="525" y="16" width="130" height="44" rx="12"/>
+          <text class="t1" x="590" y="43" text-anchor="middle">API</text>
+          <rect class="n" x="735" y="16" width="130" height="44" rx="12"/>
+          <text class="t1" x="800" y="43" text-anchor="middle">Postgres</text>
+          <rect class="n" x="915" y="16" width="130" height="44" rx="12"/>
+          <text class="t1" x="980" y="43" text-anchor="middle">Redis</text>
+
+          <!-- lifelines -->
+          <line class="ll" x1="190" y1="60" x2="190" y2="632"/>
+          <line class="ll" x1="380" y1="60" x2="380" y2="632"/>
+          <line class="ll" x1="590" y1="60" x2="590" y2="632"/>
+          <line class="ll" x1="800" y1="60" x2="800" y2="632"/>
+          <line class="ll" x1="980" y1="60" x2="980" y2="632"/>
+
+          <!-- once per session -->
+          <path class="e" d="M190 110 H380" marker-end="url(#ah)"/>
+          <text class="el" x="285" y="102" text-anchor="middle">sign in, email or GitHub</text>
+          <path class="e e-ret" d="M380 146 H190" marker-end="url(#ah)"/>
+          <text class="el" x="285" y="138" text-anchor="middle">JWT with sub, session_id</text>
+
+          <rect class="n" x="100" y="164" width="180" height="30" rx="8"/>
+          <text class="t2" x="190" y="184" text-anchor="middle">generate P-256 key pair</text>
+
+          <path class="e" d="M190 226 H590" marker-end="url(#ah)"/>
+          <text class="el mono" x="390" y="218" text-anchor="middle">POST /v1/auth/device-keys, bearer only</text>
+          <path class="e" d="M590 258 H800" marker-end="url(#ah)"/>
+          <text class="el" x="695" y="250" text-anchor="middle">bind key to session_id</text>
+          <path class="e e-ret" d="M590 290 H190" marker-end="url(#ah)"/>
+          <text class="el" x="390" y="282" text-anchor="middle">201, key bound (409 if already bound)</text>
+
+          <!-- every request -->
+          <path class="e e-hot" d="M190 362 H590" marker-end="url(#ah-hot)"/>
+          <text class="el el-hot" x="390" y="354" text-anchor="middle">request + bearer + 3 signature headers</text>
+          <path class="e" d="M590 398 H380" marker-end="url(#ah)"/>
+          <text class="el" x="485" y="390" text-anchor="middle">verify JWT (cached JWKS)</text>
+
+          <rect class="n" x="490" y="414" width="200" height="30" rx="8"/>
+          <text class="t2" x="590" y="434" text-anchor="middle">timestamp within 60 s</text>
+
+          <path class="e" d="M590 474 H800" marker-end="url(#ah)"/>
+          <text class="el" x="695" y="466" text-anchor="middle">load key by session_id</text>
+
+          <rect class="n n-hot" x="480" y="490" width="220" height="30" rx="8"/>
+          <text class="t2" x="590" y="510" text-anchor="middle">verify ECDSA signature</text>
+
+          <path class="e" d="M590 550 H980" marker-end="url(#ah)"/>
+          <text class="el mono" x="785" y="542" text-anchor="middle">SET nonce:{session}:{nonce} NX EX 120</text>
+          <path class="e e-ret" d="M980 582 H590" marker-end="url(#ah)"/>
+          <text class="el" x="785" y="574" text-anchor="middle">already set: 401 REPLAY_DETECTED</text>
+          <path class="e e-ret" d="M590 614 H190" marker-end="url(#ah)"/>
+          <text class="el" x="390" y="606" text-anchor="middle">response, Actor { userId, role, sessionId } used inside</text>
+        </svg>
+      </div>
+      <figcaption><strong>Checks run in this order and the first failure wins.</strong> The token must pass issuer, audience and expiry checks and carry a <code>session_id</code>. The binding's <code>user_id</code> must match the token's <code>sub</code>. If Redis is down, the request fails with 503 rather than skipping the replay check.</figcaption>
+    </figure>
+
+    <div class="canon">
+      <div class="canon-h">String the client signs (ECDSA P-256, SHA-256, IEEE-P1363)</div>
+<pre><span class="sk">GGI-SIG-V1</span>
+{METHOD}
+{originalUrl}
+{timestamp}
+{nonce}
+<span class="k">base64url(sha256(rawBody))</span>
+<span class="k">base64url(sha256(accessToken))</span></pre>
+    </div>
+
+    <div class="facts">
+      <div><h3>Bound to the session</h3><p>The key is tied to Supabase's <code>session_id</code>, so a token from another login cannot use it.</p></div>
+      <div><h3>Covers the whole request</h3><p>Method, URL, body hash and token hash are signed, so changing any of them breaks the signature.</p></div>
+      <div><h3>Known gap</h3><p>A token stolen in the first 5 minutes, before the client binds its key, could be bound by someone else. The real client then sees <code>KEY_ALREADY_BOUND</code>.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- LAYERS -->
+<section id="layers">
+  <div class="wrap">
+    <div class="head">
+      <h2>The domain doesn't import Nest, Prisma or Redis.</h2>
+      <p>Each module has the same layers. Controllers call use cases, use cases depend only on interfaces, and ESLint's <code>no-restricted-imports</code> blocks framework imports inside <code>domain/</code>.</p>
+    </div>
+
+    <div class="layers scroll">
+      <table>
+        <thead>
+          <tr><th>Layer</th><th>auth/</th><th>chat/</th><th>subscriptions/</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Controllers<span>validate input, build Actor</span></td>
+            <td>AuthController</td>
+            <td>ChatController</td>
+            <td>SubscriptionsController<br>AdminBillingController</td>
+          </tr>
+          <tr>
+            <td>Application<span>one use case per action</span></td>
+            <td>RegisterDeviceKey<br>GetMe</td>
+            <td>AskQuestion<br>ListChats</td>
+            <td>Create, Cancel<br>SetAutoRenew, List<br>RunBillingCycle</td>
+          </tr>
+          <tr class="core">
+            <td>Domain<span>pure TypeScript, unit tested</span></td>
+            <td>DeviceBinding<br>SignatureVerifier<br>KeyBindingPolicy</td>
+            <td>ChatMessage, MonthlyUsage<br>QuotaAllocator, UsagePeriod<br>TokenEstimator<br>ChatAccessPolicy<br>BundleSelectionPolicy</td>
+            <td>Subscription<br>PricingCatalog<br>PeriodCalculator<br>SubscriptionAccessPolicy</td>
+          </tr>
+          <tr>
+            <td>Ports<span>interfaces in domain/ports.ts</span></td>
+            <td>TokenVerifier, KeyCrypto<br>NonceStore</td>
+            <td>AiCompletionPort<br>BundleQuotaPort</td>
+            <td>PaymentGateway</td>
+          </tr>
+          <tr>
+            <td>Repositories<span>interface + Prisma class</span></td>
+            <td>PrismaUserRepository<br>PrismaDeviceBindingRepository</td>
+            <td>PrismaChatMessageRepository<br>PrismaMonthlyUsageRepository</td>
+            <td>PrismaSubscriptionRepository</td>
+          </tr>
+          <tr>
+            <td>Infrastructure<span>adapters for the ports</span></td>
+            <td>SupabaseTokenVerifier<br>EcdsaKeyCrypto<br>RedisNonceStore</td>
+            <td>MockOpenAiAdapter</td>
+            <td>SimulatedPaymentGateway<br>BillingScheduler<br>BundleQuotaAdapter</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure style="margin-top: 48px">
+      <h3 class="sub-h">How chat uses subscriptions without importing them</h3>
+      <div class="tile scroll">
+        <svg class="dg" viewBox="0 0 900 220" role="img" aria-label="Chat's AskQuestion calls BundleQuotaPort, an interface chat owns. Subscriptions implements it with BundleQuotaAdapter, which locks subscription rows. Both run inside one TransactionRunner transaction.">
+          <rect class="g" x="10" y="10" width="420" height="120" rx="18"/>
+          <text class="gl" x="28" y="36">chat</text>
+          <rect class="n" x="28" y="52" width="170" height="60" rx="12"/>
+          <text class="t1" x="44" y="78">AskQuestion</text>
+          <text class="t2" x="44" y="96">use case</text>
+          <rect class="n n-dash n-hot" x="242" y="52" width="170" height="60" rx="12"/>
+          <text class="t1" x="258" y="78">BundleQuotaPort</text>
+          <text class="t2" x="258" y="96">interface chat owns</text>
+          <path class="e" d="M198 82 H242" marker-end="url(#ah)"/>
+          <text class="el" x="220" y="74" text-anchor="middle">calls</text>
+
+          <rect class="g" x="470" y="10" width="420" height="120" rx="18"/>
+          <text class="gl" x="488" y="36">subscriptions</text>
+          <rect class="n" x="488" y="52" width="190" height="60" rx="12"/>
+          <text class="t1" x="504" y="78">BundleQuotaAdapter</text>
+          <text class="t2" x="504" y="96">lockUsableBundles, consume</text>
+          <rect class="n" x="712" y="52" width="160" height="60" rx="12"/>
+          <text class="t1 mono" x="728" y="78">subscriptions</text>
+          <text class="t2" x="728" y="96">rows, FOR UPDATE</text>
+          <path class="e e-hot e-ret" d="M488 82 H412" marker-end="url(#ah-hot)"/>
+          <text class="el el-hot" x="450" y="74" text-anchor="middle">implements</text>
+          <path class="e" d="M678 82 H712" marker-end="url(#ah)"/>
+
+          <rect class="n" x="10" y="152" width="880" height="56" rx="14"/>
+          <text class="t1" x="30" y="176">TransactionRunner</text>
+          <text class="t2" x="30" y="194">Keeps one Prisma transaction in AsyncLocalStorage, so repositories from both modules join it</text>
+          <path class="e" d="M113 130 V152" />
+          <path class="e" d="M583 130 V152" />
+        </svg>
+      </div>
+      <figcaption><strong>Chat defines the port; subscriptions provides it.</strong> Chat never sees a <code>Subscription</code> entity. It gets <code>BundleSnapshot</code> values with an ID, remaining messages and dates. Observability and shared code (<code>DomainError</code>, <code>Actor</code>, <code>Clock</code>, guards, <code>RateLimiter</code>) sit outside the three modules.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- QUOTA -->
+<section id="quota">
+  <div class="wrap">
+    <div class="head">
+      <h2>Quota is spent only after the answer exists.</h2>
+      <p>The AI call happens outside the transaction. Quota is deducted afterwards, inside a single transaction with row locks, so there is no pending state and nothing to refund.</p>
+    </div>
+
+    <figure>
+      <div class="tile scroll">
+        <svg class="dg" viewBox="0 0 1000 318" role="img" aria-label="Timeline of AskQuestion: a lock-free pre-check, then the mock AI call outside any transaction, then one transaction that locks the usage row and bundles, allocates, consumes and inserts the chat message.">
+          <rect class="n" x="20" y="110" width="160" height="84" rx="14"/>
+          <text class="t1" x="36" y="138">Pre-check</text>
+          <text class="t2" x="36" y="158">no locks taken</text>
+          <text class="t2" x="36" y="176">402 if nothing left</text>
+
+          <rect class="n n-dash" x="210" y="110" width="240" height="84" rx="14"/>
+          <text class="t1" x="226" y="138">Mock OpenAI call</text>
+          <text class="t2" x="226" y="158">300–1500 ms</text>
+          <text class="t2" x="226" y="176">outside any transaction</text>
+
+          <path class="e" d="M180 152 H210" marker-end="url(#ah)"/>
+          <path class="e" d="M450 152 H480" marker-end="url(#ah)"/>
+
+          <rect class="tx" x="480" y="12" width="500" height="266" rx="18"/>
+          <text class="t1" x="500" y="40">One transaction</text>
+          <text class="t2" x="960" y="40" text-anchor="end">Read Committed, 5 s timeout</text>
+
+          <g>
+            <rect class="n" x="500" y="56" width="460" height="28" rx="8"/>
+            <text class="t3" x="514" y="75">1</text><text class="t2" x="534" y="75">upsert this month's <tspan class="mono">monthly_usage</tspan> row</text>
+            <rect class="n" x="500" y="90" width="460" height="28" rx="8"/>
+            <text class="t3" x="514" y="109">2</text><text class="t2" x="534" y="109">lock that row <tspan class="mono">FOR UPDATE</tspan>, which queues this user's requests</text>
+            <rect class="n" x="500" y="124" width="460" height="28" rx="8"/>
+            <text class="t3" x="514" y="143">3</text><text class="t2" x="534" y="143">lock usable bundles <tspan class="mono">FOR UPDATE ORDER BY id</tspan></text>
+            <rect class="n n-hot" x="500" y="158" width="460" height="28" rx="8"/>
+            <text class="t3" x="514" y="177">4</text><text class="t2" x="534" y="177"><tspan class="mono">QuotaAllocator</tspan>: free first, then the newest bundle</text>
+            <rect class="n" x="500" y="192" width="460" height="28" rx="8"/>
+            <text class="t3" x="514" y="211">5</text><text class="t2" x="534" y="211">use one free message or one bundle message</text>
+            <rect class="n" x="500" y="226" width="460" height="28" rx="8"/>
+            <text class="t3" x="514" y="245">6</text><text class="t2" x="534" y="245">insert <tspan class="mono">chat_messages</tspan>, commit, return 201</text>
+          </g>
+
+          <path class="e" d="M20 298 H980" marker-end="url(#ah)"/>
+          <text class="t2" x="20" y="316">request arrives</text>
+          <text class="t2" x="970" y="316" text-anchor="end">response</text>
+        </svg>
+      </div>
+      <figcaption><strong>An integration test sends 10 parallel requests with 3 free messages left and expects exactly 3 × 201.</strong> A request that loses the race wastes one mock AI call and gets 402 from the allocator. CHECK constraints guard the counters a second time. If the request already timed out with 504 when the AI returns, the transaction is skipped and the user isn't charged.</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div><h3>3 free messages a month</h3><p>One row per user and UTC month (<code>'YYYY-MM'</code>). A new month means a new row, so no reset job is needed.</p></div>
+      <div><h3>Bundles per billing cycle</h3><p>Basic 10, Pro 100, Enterprise unlimited. Each renewal resets <code>used_messages</code>.</p></div>
+      <div><h3>Fixed lock order</h3><p>Bundles are always locked in ID order, so two requests from the same user can't deadlock.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- BILLING -->
+<section id="billing">
+  <div class="wrap">
+    <div class="head">
+      <h2>Every subscription that ends records why.</h2>
+      <p>A subscription is <code>ACTIVE</code> or <code>INACTIVE</code>, and an inactive one keeps a reason. Payments are simulated with a configurable failure rate.</p>
+    </div>
+
+    <figure>
+      <div class="tile scroll">
+        <svg class="dg" viewBox="0 0 900 262" role="img" aria-label="State diagram: creating a subscription charges the first cycle. Success makes it ACTIVE; failure makes it INACTIVE with PAYMENT_FAILED. ACTIVE renews itself on successful charge, or becomes INACTIVE as CANCELLED, EXPIRED or PAYMENT_FAILED.">
+          <circle class="dot" cx="50" cy="130" r="8"/>
+          <text class="t2" x="36" y="108">create</text>
+
+          <rect class="n n-hot" x="240" y="95" width="190" height="70" rx="35"/>
+          <text class="t1 mono" x="335" y="126" text-anchor="middle">ACTIVE</text>
+          <text class="t2" x="335" y="145" text-anchor="middle">quota usable</text>
+
+          <path class="e" d="M58 130 H240" marker-end="url(#ah)"/>
+          <text class="el" x="149" y="122" text-anchor="middle">first charge succeeds</text>
+
+          <path class="e e-hot" d="M300 95 C300 52, 370 52, 370 95" marker-end="url(#ah-hot)"/>
+          <text class="el el-hot" x="335" y="44" text-anchor="middle">renews: charge ok, usage reset</text>
+
+          <rect class="g" x="600" y="12" width="290" height="244" rx="20"/>
+          <text class="gl" x="620" y="38">INACTIVE, with reason</text>
+          <rect class="n" x="620" y="54" width="250" height="54" rx="12"/>
+          <text class="t1 mono" x="636" y="77">CANCELLED</text>
+          <text class="t2" x="636" y="96">ends now, chat history kept</text>
+          <rect class="n" x="620" y="122" width="250" height="54" rx="12"/>
+          <text class="t1 mono" x="636" y="145">EXPIRED</text>
+          <text class="t2" x="636" y="164">period ended without auto-renew</text>
+          <rect class="n" x="620" y="190" width="250" height="54" rx="12"/>
+          <text class="t1 mono" x="636" y="213">PAYMENT_FAILED</text>
+          <text class="t2" x="636" y="232">first or renewal charge declined</text>
+
+          <path class="e" d="M430 112 H515 V81 H620" marker-end="url(#ah)"/>
+          <text class="el" x="567" y="73" text-anchor="middle">cancel</text>
+          <path class="e" d="M430 140 H620" marker-end="url(#ah)"/>
+          <text class="el" x="525" y="132" text-anchor="middle">due, auto-renew off</text>
+          <path class="e" d="M430 152 H505 V207 H620" marker-end="url(#ah)"/>
+          <text class="el" x="498" y="186" text-anchor="end">renewal fails</text>
+          <path class="e" d="M50 138 V232 H620" marker-end="url(#ah)"/>
+          <text class="el" x="290" y="224" text-anchor="middle">first charge fails, API returns 402</text>
+        </svg>
+      </div>
+      <figcaption><strong>One renewal run handles up to 50 due subscriptions.</strong> <code>RunBillingCycle</code> selects <code>ACTIVE</code> rows whose <code>renewal_date</code> has passed, using <code>FOR UPDATE SKIP LOCKED</code>, so two runs never renew the same row. The cron job and <code>POST /v1/admin/billing/run</code> call the same use case, and each run moves every row forward by one cycle.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- DATA -->
+<section id="data">
+  <div class="wrap">
+    <div class="head">
+      <h2>Five tables in PostgreSQL.</h2>
+      <p>User IDs come from Supabase, so the API never stores credentials. Everything else belongs to a user.</p>
+    </div>
+
+    <figure>
+      <div class="tile scroll">
+        <svg class="dg" viewBox="0 0 900 334" role="img" aria-label="Entity diagram: users has many device_bindings, monthly_usage rows, subscriptions and chat_messages. chat_messages optionally references the subscription that paid for it.">
+          <rect class="n" x="20" y="110" width="190" height="110" rx="14"/>
+          <text class="t1 mono" x="36" y="136">users</text>
+          <text class="t2 mono" x="36" y="160">id  = Supabase sub</text>
+          <text class="t2 mono" x="36" y="178">email</text>
+          <text class="t2 mono" x="36" y="196">role  USER | ADMIN</text>
+
+          <rect class="n" x="320" y="14" width="220" height="92" rx="14"/>
+          <text class="t1 mono" x="336" y="40">device_bindings</text>
+          <text class="t2 mono" x="336" y="64">session_id  unique</text>
+          <text class="t2 mono" x="336" y="82">public_key_jwk</text>
+
+          <rect class="n" x="320" y="220" width="220" height="100" rx="14"/>
+          <text class="t1 mono" x="336" y="246">monthly_usage</text>
+          <text class="t2 mono" x="336" y="270">key (user_id, period)</text>
+          <text class="t2 mono" x="336" y="288">free_used, free_limit</text>
+          <text class="t2 mono" x="336" y="306">total_messages</text>
+
+          <rect class="n" x="660" y="14" width="225" height="146" rx="14"/>
+          <text class="t1 mono" x="676" y="40">subscriptions</text>
+          <text class="t2 mono" x="676" y="64">tier, billing_cycle</text>
+          <text class="t2 mono" x="676" y="82">max_messages, used_…</text>
+          <text class="t2 mono" x="676" y="100">status, inactive_reason</text>
+          <text class="t2 mono" x="676" y="118">renewal_date</text>
+          <text class="t2 mono" x="676" y="136">price_cents</text>
+
+          <rect class="n" x="660" y="190" width="225" height="134" rx="14"/>
+          <text class="t1 mono" x="676" y="216">chat_messages</text>
+          <text class="t2 mono" x="676" y="240">question, answer</text>
+          <text class="t2 mono" x="676" y="258">quota_source</text>
+          <text class="t2 mono" x="676" y="276">prompt/completion tokens</text>
+          <text class="t2 mono" x="676" y="294">latency_ms, request_id</text>
+          <text class="t2 mono" x="676" y="312">period 'YYYY-MM'</text>
+
+          <!-- user_id bus -->
+          <path class="e" d="M210 165 H600"/>
+          <path class="e" d="M260 60 V270"/>
+          <path class="e" d="M260 60 H320" marker-end="url(#ah)"/>
+          <path class="e" d="M260 270 H320" marker-end="url(#ah)"/>
+          <path class="e" d="M600 87 V257"/>
+          <path class="e" d="M600 87 H660" marker-end="url(#ah)"/>
+          <path class="e" d="M600 257 H660" marker-end="url(#ah)"/>
+          <text class="el mono" x="430" y="157" text-anchor="middle">user_id</text>
+
+          <path class="e e-hot e-ret" d="M772 190 V160" marker-end="url(#ah-hot)"/>
+          <text class="el el-hot" x="782" y="180">optional</text>
+        </svg>
+      </div>
+      <figcaption><strong>Each arrow points from a user to the rows that user owns.</strong> <code>chat_messages.subscription_id</code> records which bundle paid for a message, and is empty when free quota paid. Indexes cover list queries (<code>user_id, created_at DESC</code>) and billing (<code>status, renewal_date</code>).</figcaption>
+    </figure>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="row">
+      <span>Demo UI: <a href="https://momin-imran-qureshi-demo.vercel.app">momin-imran-qureshi-demo.vercel.app</a></span>
+      <span>API: <a href="https://momin-imran-qureshi-api.vercel.app">momin-imran-qureshi-api.vercel.app</a></span>
+    </div>
+    <div class="admin">
+      <h3>Admin sign-in for the demo</h3>
+      <dl>
+        <dt>Email</dt><dd class="sel"><code>demo@example.com</code></dd>
+        <dt>Password</dt><dd class="sel"><code>Str0ng-Passw0rd!</code></dd>
+        <dt>Role</dt><dd><code>ADMIN</code> on the demo project</dd>
+      </dl>
+      <p>This account belongs to a throwaway demo project that has only simulated payment data. Use it for <code>GET /v1/admin/metrics</code> and <code>POST /v1/admin/billing/run</code>. Don't reuse this password anywhere else. Any other address you sign up with gets a regular user account with the free quota.</p>
+    </div>
+    <p>CI runs format, lint, typecheck, unit tests and integration tests against Postgres 16 and Redis 7 service containers on every push. Integration tests use a local mock JWKS instead of Supabase. Built from the repository's README, Prisma schema and source.</p>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var fig = document.getElementById('sys');
+    var buttons = fig.querySelectorAll('.seg button');
+    function setMode(mode) {
+      fig.setAttribute('data-mode', mode);
+      buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.mode === mode)); });
+      try { localStorage.setItem('ggi-arch-mode', mode); } catch (e) {}
+    }
+    buttons.forEach(function (b) { b.addEventListener('click', function () { setMode(b.dataset.mode); }); });
+    try {
+      var saved = localStorage.getItem('ggi-arch-mode');
+      if (saved === 'local' || saved === 'cloud') setMode(saved);
+    } catch (e) {}
+  })();
+</script>

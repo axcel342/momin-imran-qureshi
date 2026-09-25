@@ -73,6 +73,11 @@ Domain errors carry a `code`, and one global exception filter maps them to HTTP 
 
 ## Architecture decisions
 
+An illustrated architecture overview is in [`docs/architecture.html`](docs/architecture.html), also
+published as a page at <https://claude.ai/artifact/BrwPjtvJ8C4sCSw9Phtm2E>. It covers the system
+diagram, the guard pipeline, request signing, module layers, the quota transaction, subscription
+states and the data model.
+
 ### System architecture
 
 ```mermaid
